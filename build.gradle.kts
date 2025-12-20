@@ -1,31 +1,9 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
 plugins {
-    `kotlin-dsl`
-}
-
-repositories {
-    google()
-    mavenCentral()
-    gradlePluginPortal()
-}
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
-
-tasks.withType<KotlinCompile>().configureEach {
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
-    }
-}
-
-dependencies {
-    implementation(libs.android.gradlePlugin)
-    implementation(libs.kotlin.gradlePlugin)
-    implementation(libs.spotless.gradlePlugin)
-    implementation(libs.detekt.gradlePlugin)
-    implementation(libs.dokka.gradlePlugin)
-    implementation(libs.versions.gradlePlugin)
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.kotlin.android) apply false
+    alias(libs.plugins.spotless) apply false
+    alias(libs.plugins.detekt) apply false
+    alias(libs.plugins.dokka) apply false
+    alias(libs.plugins.versions) apply false
 }
