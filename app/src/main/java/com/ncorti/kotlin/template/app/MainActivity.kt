@@ -1,43 +1,43 @@
-package com.ncorti.kotlin.template.app
+package com.example.myapplication
 
-import android.content.Intent
-import android.os.Bundle
-import android.view.View
 import androidx.appcompat.app.AppCompatActivity
-import com.ncorti.kotlin.template.app.databinding.ActivityMainBinding
-import com.ncorti.kotlin.template.library.FactorialCalculator
-import com.ncorti.kotlin.template.library.android.ToastUtil
+import android.os.Bundle
+import android.widget.Button
+import android.widget.TextView
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
-
-    private lateinit var binding: ActivityMainBinding
+    private var count = 0
+    private lateinit var countText: TextView
+    private lateinit var clickButton: Button
+    private lateinit var resetButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        setContentView(R.layout.activity_main)
 
-        binding.buttonCompute.setOnClickListener {
-            val message = if (binding.editTextFactorial.text.isNotEmpty()) {
-                val input = binding.editTextFactorial.text.toString().toLong()
-                val result = try {
-                    FactorialCalculator.computeFactorial(input).toString()
-                } catch (ex: IllegalStateException) {
-                    "Error: ${ex.message}"
-                }
+        countText = findViewById(R.id.count_text)
+        clickButton = findViewById(R.id.click_button)
+        resetButton = findViewById(R.id.reset_button)
 
-                binding.textResult.text = result
-                binding.textResult.visibility = View.VISIBLE
-                getString(R.string.notification_title, result)
-            } else {
-                getString(R.string.please_enter_a_number)
+        updateCountText()
+
+        clickButton.setOnClickListener {
+            count++
+            updateCountText()
+            if (count == 10) {
+                countText.text = "🎉 You reached 10 clicks!"
             }
-            ToastUtil.showToast(this, message)
         }
 
-        binding.buttonAppcompose.setOnClickListener {
-            val intent = Intent(it.context, ComposeActivity::class.java)
-            startActivity(intent)
+        resetButton.setOnClickListener {
+            count = 0
+            updateCountText()
         }
+    }
+
+    private fun updateCountText() {
+        countText.text = "Clicks: $count"
     }
 }
