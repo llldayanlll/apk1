@@ -1,7 +1,18 @@
-// In build.gradle.kts at the root of your project
-// Look for something like this around line 14:
-// val VERSION: String by project
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        google()
+        mavenCentral()
+    }
+}
 
-// Change it to:
-val VERSION_NAME: String by project
-// And update any references to VERSION to use VERSION_NAME
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = "ClickCounter"
+include(":app")
