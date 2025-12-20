@@ -37,3 +37,8 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 }
+
+repositories {
+    google()
+    mavenCentral()
+}
