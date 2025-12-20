@@ -12,33 +12,9 @@ jobs:
   template-cleanup:
     name: Template Cleanup
     runs-on: ubuntu-latest
-    if: github.event.repository.name != 'kotlin-android-template'
+    # Disabled - always skip
+    if: false  # This will completely disable the workflow
+    
     steps:
-
-      # Check out current repository
-      - name: Fetch Sources
-        uses: actions/checkout@v4
-      # Setup Java
-      - uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-      # Setup Gradle
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-      # Cleanup project
-      - name: Cleanup
-        run: ./gradlew templateCleanup
-      # Commit modified files
-      - name: Commit files
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .
-          git commit -m "Template cleanup"
-      # Push changes
-      - name: Push changes
-        uses: ad-m/github-push-action@v0.8.0
-        with:
-          branch: main
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Workflow Disabled
+        run: echo "Template cleanup is disabled. Update your project manually."
