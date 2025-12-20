@@ -1,38 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="24dp"
+    android:padding="32dp"
     tools:context=".MainActivity">
 
     <TextView
-        android:id="@+id/count_text"
+        android:id="@+id/countTextView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Clicks: 0"
-        android:textSize="32sp"
+        android:textSize="48sp"
         android:textStyle="bold"
         android:layout_marginBottom="48dp" />
 
     <Button
-        android:id="@+id/click_button"
+        android:id="@+id/clickButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Click Me!"
-        android:textSize="20sp"
+        android:text="CLICK ME!"
+        android:textSize="24sp"
         android:padding="16dp"
         android:layout_marginBottom="16dp" />
 
     <Button
-        android:id="@+id/reset_button"
+        android:id="@+id/resetButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Reset"
-        android:textSize="16sp"
+        android:text="RESET"
+        android:textSize="18sp"
         android:padding="12dp" />
 
 </LinearLayout>
