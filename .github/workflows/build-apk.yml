@@ -1,11 +1,9 @@
-name: Build Click Counter APK
+name: Build APK
 
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
-  workflow_dispatch:  # Allows manual trigger
+  workflow_dispatch:
 
 jobs:
   build:
@@ -24,35 +22,16 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
       
-    - name: Cache Gradle dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-        restore-keys: |
-          gradle-${{ runner.os }}-
-          
     - name: Make gradlew executable
       run: chmod +x gradlew
       
+    # Simple build command
     - name: Build Debug APK
       run: ./gradlew assembleDebug
       
-    - name: Upload Debug APK
+    - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: click-counter-debug-apk
+        name: app-debug-apk
         path: app/build/outputs/apk/debug/*.apk
-        retention-days: 30
-        
-    - name: Build Release APK (unsigned)
-      run: ./gradlew assembleRelease
-      
-    - name: Upload Release APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: click-counter-release-apk
-        path: app/build/outputs/apk/release/*.apk
         retention-days: 30
