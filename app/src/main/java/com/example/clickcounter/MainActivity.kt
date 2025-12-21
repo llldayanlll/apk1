@@ -71,7 +71,7 @@ class MainActivity : AppCompatActivity() {
                 val num2 = if (input2.text.toString().isEmpty()) 0.0 
                           else input2.text.toString().toDouble()
                 val sum = num1 + num2
-                result.text = "Result: \$sum"
+                result.text = "Result: $sum"
             } catch (e: Exception) {
                 result.text = "Error: Use numbers only"
             }

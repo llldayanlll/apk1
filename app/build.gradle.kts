@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.clickcounter"
-        minSdk = 21  # Back to 21 (adaptive icons need 26+)
+        minSdk = 21
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
