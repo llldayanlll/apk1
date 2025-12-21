@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.clickcounter"
-        minSdk = 21
+        minSdk = 16  // Android 4.1 - for VERY old phones
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
@@ -18,23 +18,26 @@ android {
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
     
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
 }
 
 kotlin {
     compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8)
     }
 }
 
 dependencies {
-    implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("androidx.core:core-ktx:1.12.0")
-    implementation("com.google.android.material:material:1.11.0")
+    implementation("androidx.appcompat:appcompat:1.3.1")  // Older, more stable version
+    implementation("androidx.core:core:1.6.0")  // Core without -ktx for compatibility
 }

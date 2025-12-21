@@ -12,76 +12,79 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Create input fields
-        val input1 = EditText(this).apply {
-            hint = "Enter first number"
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER
-            setPadding(20, 20, 20, 20)
-        }
+        // SIMPLE layout without complex features
+        val layout = LinearLayout(this)
+        layout.orientation = LinearLayout.VERTICAL
+        layout.gravity = android.view.Gravity.CENTER
         
-        val input2 = EditText(this).apply {
-            hint = "Enter second number"
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER
-            setPadding(20, 20, 20, 20)
-        }
+        // Title
+        val title = TextView(this)
+        title.text = "Addition Calculator"
+        title.textSize = 24f
+        layout.addView(title)
         
-        // Create result text
-        val resultText = TextView(this).apply {
-            text = "Result: "
-            textSize = 24f
-            setPadding(0, 40, 0, 40)
-        }
+        // Input 1
+        val input1 = EditText(this)
+        input1.hint = "First number"
+        input1.inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        input1.setPadding(20, 20, 20, 20)
+        layout.addView(input1)
         
-        // Create add button
-        val addButton = Button(this).apply {
-            text = "ADD"
-            setOnClickListener {
-                try {
-                    val num1 = input1.text.toString().toDoubleOrNull() ?: 0.0
-                    val num2 = input2.text.toString().toDoubleOrNull() ?: 0.0
-                    val sum = num1 + num2
-                    resultText.text = "Result: \$sum"
-                } catch (e: Exception) {
-                    resultText.text = "Error: Enter valid numbers"
-                }
+        // Plus sign
+        val plus = TextView(this)
+        plus.text = "+"
+        plus.textSize = 20f
+        plus.gravity = android.view.Gravity.CENTER
+        layout.addView(plus)
+        
+        // Input 2
+        val input2 = EditText(this)
+        input2.hint = "Second number"
+        input2.inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        input2.setPadding(20, 20, 20, 20)
+        layout.addView(input2)
+        
+        // Add Button
+        val addButton = Button(this)
+        addButton.text = "ADD"
+        addButton.setPadding(30, 15, 30, 15)
+        layout.addView(addButton)
+        
+        // Result
+        val result = TextView(this)
+        result.text = "Result: "
+        result.textSize = 20f
+        result.setPadding(0, 30, 0, 0)
+        layout.addView(result)
+        
+        // Clear Button
+        val clearButton = Button(this)
+        clearButton.text = "CLEAR"
+        clearButton.setPadding(30, 10, 30, 10)
+        layout.addView(clearButton)
+        
+        // Button actions
+        addButton.setOnClickListener {
+            try {
+                val num1 = if (input1.text.toString().isEmpty()) 0.0 
+                          else input1.text.toString().toDouble()
+                val num2 = if (input2.text.toString().isEmpty()) 0.0 
+                          else input2.text.toString().toDouble()
+                val sum = num1 + num2
+                result.text = "Result: \$sum"
+            } catch (e: Exception) {
+                result.text = "Error: Use numbers only"
             }
         }
         
-        // Create clear button
-        val clearButton = Button(this).apply {
-            text = "CLEAR"
-            setOnClickListener {
-                input1.text.clear()
-                input2.text.clear()
-                resultText.text = "Result: "
-            }
+        clearButton.setOnClickListener {
+            input1.text.clear()
+            input2.text.clear()
+            result.text = "Result: "
         }
         
-        // Create layout
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = android.view.Gravity.CENTER
-            setPadding(50, 100, 50, 100)
-            
-            addView(TextView(this@MainActivity).apply {
-                text = "Addition Calculator"
-                textSize = 32f
-                gravity = android.view.Gravity.CENTER
-                setPadding(0, 0, 0, 50)
-            })
-            
-            addView(input1)
-            addView(TextView(this@MainActivity).apply {
-                text = "+"
-                textSize = 24f
-                gravity = android.view.Gravity.CENTER
-                setPadding(0, 10, 0, 10)
-            })
-            addView(input2)
-            addView(addButton)
-            addView(clearButton)
-            addView(resultText)
-        }
+        // Set padding for entire layout
+        layout.setPadding(50, 100, 50, 100)
         
         setContentView(layout)
     }
