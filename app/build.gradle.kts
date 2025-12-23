@@ -33,7 +33,4 @@ kotlin {
     }
 }
 
-dependencies {
-    // Older version compatible with SDK 30
-    implementation("androidx.core:core-ktx:1.8.0")
-}
+// NO dependencies at all - pure Android SDK
