@@ -1,14 +1,9 @@
-# Keep all classes that might be dynamically created
--keep class com.example.clickcounter.** { *; }
--keep class androidx.appcompat.** { *; }
+# Keep coroutines
+-keep class kotlinx.coroutines.** { *; }
 
-# Don't optimize the bytecode (causes issues on some devices)
--dontoptimize
--dontobfuscate
+# Keep networking classes
+-keep class java.net.** { *; }
+-keep class java.io.** { *; }
 
-# Keep generic signatures
--keepattributes Signature
--keepattributes *Annotation*
-
-# Keep line numbers for stack traces
--keepattributes SourceFile,LineNumberTable
+# Keep app classes
+-keep class com.example.myapp.** { *; }
