@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.myapp"
-        minSdk = 16
+        minSdk = 21  # Back to 21 for AppCompat
         targetSdk = 30
         versionCode = 1
         versionName = "1.0.0"
@@ -27,7 +27,6 @@ android {
     }
 }
 
-// Use the NEW compilerOptions DSL (correct for newer Kotlin)
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8)
@@ -35,5 +34,5 @@ kotlin {
 }
 
 dependencies {
-    // NO dependencies - pure Android SDK
+    implementation("androidx.appcompat:appcompat:1.6.1")
 }
