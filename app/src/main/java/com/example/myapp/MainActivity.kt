@@ -2,35 +2,75 @@ package com.example.myapp
 
 import android.app.Activity
 import android.os.Bundle
-import android.view.Gravity
-import android.widget.LinearLayout
+import android.widget.Button
+import android.widget.EditText
 import android.widget.TextView
+import android.widget.LinearLayout
+import android.widget.ScrollView
 
 class MainActivity : Activity() {
+    
+    private lateinit var commandInput: EditText
+    private lateinit var outputText: TextView
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // SIMPLE - No AppCompat, No Kotlin extensions
-        val textView = TextView(this)
-        textView.text = "TCP Chat App"
-        textView.textSize = 24f
-        textView.gravity = Gravity.CENTER
+        // Create simple UI
+        commandInput = EditText(this).apply {
+            hint = "Type command here"
+            setPadding(20, 20, 20, 20)
+        }
         
-        val status = TextView(this)
-        status.text = "Working on Huawei..."
-        status.textSize = 16f
-        status.gravity = Gravity.CENTER
-        status.setPadding(0, 50, 0, 0)
+        val executeButton = Button(this).apply {
+            text = "RUN"
+            setOnClickListener { runCommand() }
+        }
         
-        val layout = LinearLayout(this)
-        layout.orientation = LinearLayout.VERTICAL
-        layout.gravity = Gravity.CENTER
-        layout.setPadding(100, 100, 100, 100)
+        outputText = TextView(this).apply {
+            text = "Terminal Output:\n\n"
+            setPadding(20, 20, 20, 20)
+        }
         
-        layout.addView(textView)
-        layout.addView(status)
+        val scrollView = ScrollView(this).apply {
+            addView(outputText)
+        }
+        
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(40, 60, 40, 60)
+            addView(TextView(this@MainActivity).apply {
+                text = "Simple Terminal"
+                textSize = 20f
+            })
+            addView(commandInput)
+            addView(executeButton)
+            addView(scrollView)
+        }
         
         setContentView(layout)
+    }
+    
+    private fun runCommand() {
+        val cmd = commandInput.text.toString()
+        if (cmd.isEmpty()) return
+        
+        outputText.append("\n\$ $cmd\n")
+        
+        try {
+            // Execute command
+            val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
+            val output = process.inputStream.bufferedReader().readText()
+            val error = process.errorStream.bufferedReader().readText()
+            process.waitFor()
+            
+            outputText.append(output)
+            if (error.isNotEmpty()) outputText.append("Error: $error\n")
+            
+        } catch (e: Exception) {
+            outputText.append("Failed: ${e.message}\n")
+        }
+        
+        commandInput.text.clear()
     }
 }
