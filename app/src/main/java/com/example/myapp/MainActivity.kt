@@ -16,21 +16,24 @@ class MainActivity : Activity() {
     private lateinit var shellIn: BufferedWriter
     private lateinit var shellOut: BufferedReader
 
+    private lateinit var currentDir: File
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val home = File(filesDir, "home")
         if (!home.exists()) home.mkdirs()
+        currentDir = home
 
-        startShell(home)
+        startShell(currentDir)
         buildUI()
 
         append("HOME = ${home.absolutePath}\n")
     }
 
-    private fun startShell(home: File) {
+    private fun startShell(dir: File) {
         val pb = ProcessBuilder("sh")
-        pb.directory(home)
+        pb.directory(dir)
         pb.redirectErrorStream(true)
 
         shell = pb.start()
@@ -49,24 +52,21 @@ class MainActivity : Activity() {
 
     private fun buildUI() {
         input = EditText(this)
-        val run = Button(this).apply {
-            text = "EXECUTE"
-            setOnClickListener { sendCommand() }
-        }
 
-        output = TextView(this).apply {
-            text = "=== TERMINAL READY ===\n"
-        }
+        val runBtn = Button(this).apply { text = "EXECUTE"; setOnClickListener { sendCommand() } }
+        val homeBtn = Button(this).apply { text = "HOME"; setOnClickListener { goHome() } }
+        val rootBtn = Button(this).apply { text = "ROOT"; setOnClickListener { goRoot() } }
 
-        scroll = ScrollView(this).apply {
-            addView(output)
-        }
+        output = TextView(this).apply { text = "=== TERMINAL READY ===\n" }
+        scroll = ScrollView(this).apply { addView(output) }
 
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(30, 40, 30, 40)
             addView(input)
-            addView(run)
+            addView(runBtn)
+            addView(homeBtn)
+            addView(rootBtn)
             addView(scroll)
         }
 
@@ -78,14 +78,24 @@ class MainActivity : Activity() {
         if (cmd.isBlank()) return
 
         append("\n$ $cmd\n")
-
-        thread {
-            shellIn.write(cmd)
-            shellIn.newLine()
-            shellIn.flush()
-        }
-
+        thread { shellIn.write(cmd); shellIn.newLine(); shellIn.flush() }
         input.text.clear()
+    }
+
+    private fun goHome() {
+        append("\n$ cd ~\n")
+        shellIn.write("cd ${filesDir.absolutePath}/home")
+        shellIn.newLine()
+        shellIn.flush()
+        currentDir = File(filesDir, "home")
+    }
+
+    private fun goRoot() {
+        append("\n$ cd /\n")
+        shellIn.write("cd /")
+        shellIn.newLine()
+        shellIn.flush()
+        currentDir = File("/")
     }
 
     private fun append(t: String) {
