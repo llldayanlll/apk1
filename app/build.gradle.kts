@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.example.myapp"
-    compileSdk = 30
+    compileSdk = 34  // Need SDK 34 for proper network permissions
 
     defaultConfig {
         applicationId = "com.example.myapp"
         minSdk = 21
-        targetSdk = 30
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
     }
@@ -33,4 +33,7 @@ kotlin {
     }
 }
 
-// NO dependencies at all - pure Android SDK
+dependencies {
+    // For network operations
+    implementation("com.squareup.okhttp3:okhttp:4.11.0")
+}
