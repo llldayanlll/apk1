@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.example.myapp"
-    compileSdk = 34
+    compileSdk = 30
 
     defaultConfig {
         applicationId = "com.example.myapp"
         minSdk = 21
-        targetSdk = 34
+        targetSdk = 30
         versionCode = 1
         versionName = "1.0.0"
     }
@@ -25,14 +25,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
-}
-
-kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8)
+    
+    kotlinOptions {
+        jvmTarget = "1.8"
     }
 }
 
-dependencies {
-    implementation("androidx.appcompat:appcompat:1.6.1")
-}
+// NO dependencies section at all
