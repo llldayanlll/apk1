@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.example.myapp"
-    compileSdk = 34  # Updated to 34
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.example.myapp"
         minSdk = 21
-        targetSdk = 34  # Updated to 34
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
     }
@@ -34,5 +34,5 @@ kotlin {
 }
 
 dependencies {
-    implementation("androidx.appcompat:appcompat:1.6.1")  # Keep this version
+    implementation("androidx.appcompat:appcompat:1.6.1")
 }
