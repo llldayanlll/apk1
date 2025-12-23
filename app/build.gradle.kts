@@ -34,5 +34,6 @@ kotlin {
 }
 
 dependencies {
-    implementation("androidx.core:core-ktx:1.10.1")
+    // Older version compatible with SDK 30
+    implementation("androidx.core:core-ktx:1.8.0")
 }
