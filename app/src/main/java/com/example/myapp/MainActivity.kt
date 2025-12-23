@@ -3,6 +3,9 @@ package com.example.myapp
 import android.app.Activity
 import android.os.Bundle
 import android.widget.*
+import android.os.Environment
+import android.content.Intent
+import android.provider.Settings
 import java.io.*
 import kotlin.concurrent.thread
 
@@ -21,14 +24,24 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Create app home
         val home = File(filesDir, "home")
         if (!home.exists()) home.mkdirs()
         currentDir = home
 
+        requestAllFilesAccess()
         startShell(currentDir)
         buildUI()
 
         append("HOME = ${home.absolutePath}\n")
+    }
+
+    private fun requestAllFilesAccess() {
+        if (!Environment.isExternalStorageManager()) {
+            val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+            startActivity(intent)
+            append("Please grant All Files Access for full storage browsing.\n")
+        }
     }
 
     private fun startShell(dir: File) {
@@ -55,7 +68,7 @@ class MainActivity : Activity() {
 
         val runBtn = Button(this).apply { text = "EXECUTE"; setOnClickListener { sendCommand() } }
         val homeBtn = Button(this).apply { text = "HOME"; setOnClickListener { goHome() } }
-        val rootBtn = Button(this).apply { text = "STORAGE"; setOnClickListener { goStorage() } }
+        val storageBtn = Button(this).apply { text = "STORAGE"; setOnClickListener { goStorage() } }
 
         output = TextView(this).apply { text = "=== TERMINAL READY ===\n" }
         scroll = ScrollView(this).apply { addView(output) }
@@ -66,7 +79,7 @@ class MainActivity : Activity() {
             addView(input)
             addView(runBtn)
             addView(homeBtn)
-            addView(rootBtn)
+            addView(storageBtn)
             addView(scroll)
         }
 
@@ -83,11 +96,12 @@ class MainActivity : Activity() {
     }
 
     private fun goHome() {
-        append("\n$ cd ~\n")
-        shellIn.write("cd ${filesDir.absolutePath}/home")
+        val homeDir = File(filesDir, "home")
+        append("\n$ cd ${homeDir.absolutePath}\n")
+        shellIn.write("cd ${homeDir.absolutePath}")
         shellIn.newLine()
         shellIn.flush()
-        currentDir = File(filesDir, "home")
+        currentDir = homeDir
     }
 
     private fun goStorage() {
