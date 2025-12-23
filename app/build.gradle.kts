@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.example.myapp"
-    compileSdk = 34  // Need SDK 34 for proper network permissions
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.example.myapp"
@@ -34,6 +34,6 @@ kotlin {
 }
 
 dependencies {
-    // For network operations
-    implementation("com.squareup.okhttp3:okhttp:4.11.0")
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("androidx.core:core-ktx:1.12.0")
 }
