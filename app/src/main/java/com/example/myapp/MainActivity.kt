@@ -55,7 +55,7 @@ class MainActivity : Activity() {
 
         val runBtn = Button(this).apply { text = "EXECUTE"; setOnClickListener { sendCommand() } }
         val homeBtn = Button(this).apply { text = "HOME"; setOnClickListener { goHome() } }
-        val rootBtn = Button(this).apply { text = "ROOT"; setOnClickListener { goRoot() } }
+        val rootBtn = Button(this).apply { text = "STORAGE"; setOnClickListener { goStorage() } }
 
         output = TextView(this).apply { text = "=== TERMINAL READY ===\n" }
         scroll = ScrollView(this).apply { addView(output) }
@@ -90,12 +90,13 @@ class MainActivity : Activity() {
         currentDir = File(filesDir, "home")
     }
 
-    private fun goRoot() {
-        append("\n$ cd /\n")
-        shellIn.write("cd /")
+    private fun goStorage() {
+        val storageDir = File("/storage/emulated/0")
+        append("\n$ cd /storage/emulated/0\n")
+        shellIn.write("cd /storage/emulated/0")
         shellIn.newLine()
         shellIn.flush()
-        currentDir = File("/")
+        currentDir = storageDir
     }
 
     private fun append(t: String) {
