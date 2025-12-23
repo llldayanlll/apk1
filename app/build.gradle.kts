@@ -5,11 +5,11 @@ plugins {
 
 android {
     namespace = "com.example.myapp"
-    compileSdk = 30  // Lower for better compatibility
+    compileSdk = 30  // Android 11 for compatibility
 
     defaultConfig {
         applicationId = "com.example.myapp"
-        minSdk = 16   // Android 4.1 - works on VERY old phones
+        minSdk = 16   // Android 4.1
         targetSdk = 30
         versionCode = 1
         versionName = "1.0.0"
@@ -20,8 +20,17 @@ android {
             isMinifyEnabled = false
         }
     }
+    
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8  // Java 8
+        targetCompatibility = JavaVersion.VERSION_1_8  // Java 8
+    }
+    
+    kotlinOptions {
+        jvmTarget = "1.8"  // Kotlin also targets Java 8
+    }
 }
 
 dependencies {
-    // NO DEPENDENCIES - Pure Android SDK only
+    // NO dependencies - pure Android SDK
 }
