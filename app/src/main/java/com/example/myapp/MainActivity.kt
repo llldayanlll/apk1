@@ -3,123 +3,79 @@ package com.example.myapp
 import android.app.Activity
 import android.os.Bundle
 import android.widget.*
-import android.os.Environment
-import android.content.Intent
-import android.provider.Settings
-import java.io.*
 import kotlin.concurrent.thread
+import java.io.File
 
 class MainActivity : Activity() {
 
-    private lateinit var input: EditText
-    private lateinit var output: TextView
-    private lateinit var scroll: ScrollView
+    lateinit var out: TextView
+    lateinit var home: File
 
-    private lateinit var shell: Process
-    private lateinit var shellIn: BufferedWriter
-    private lateinit var shellOut: BufferedReader
+    override fun onCreate(b: Bundle?) {
+        super.onCreate(b)
 
-    private lateinit var currentDir: File
+        home = File(filesDir, "home")
+        home.mkdirs()
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+        val setup = Button(this).apply { text = "SETUP" }
+        val stream = Button(this).apply { text = "STREAM" }
+        out = TextView(this)
 
-        // Create app home
-        val home = File(filesDir, "home")
-        if (!home.exists()) home.mkdirs()
-        currentDir = home
+        setup.setOnClickListener { runSetup() }
+        stream.setOnClickListener { runStream() }
 
-        requestAllFilesAccess()
-        startShell(currentDir)
-        buildUI()
-
-        append("HOME = ${home.absolutePath}\n")
-    }
-
-    private fun requestAllFilesAccess() {
-        if (!Environment.isExternalStorageManager()) {
-            val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-            startActivity(intent)
-            append("Please grant All Files Access for full storage browsing.\n")
+        val l = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(setup)
+            addView(stream)
+            addView(ScrollView(this@MainActivity).apply { addView(out) })
         }
+        setContentView(l)
     }
 
-    private fun startShell(dir: File) {
-        val pb = ProcessBuilder("sh")
-        pb.directory(dir)
-        pb.redirectErrorStream(true)
+    fun log(s: String) = runOnUiThread { out.append(s + "\n") }
 
-        shell = pb.start()
-        shellIn = BufferedWriter(OutputStreamWriter(shell.outputStream))
-        shellOut = BufferedReader(InputStreamReader(shell.inputStream))
-
+    fun sh(cmd: String) {
         thread {
-            var line: String?
-            while (shellOut.readLine().also { line = it } != null) {
-                runOnUiThread {
-                    append(line!! + "\n")
-                }
+            try {
+                val p = Runtime.getRuntime().exec(arrayOf("sh","-c",cmd))
+                log(p.inputStream.bufferedReader().readText())
+                log(p.errorStream.bufferedReader().readText())
+            } catch (e: Exception) {
+                log("ERR: ${e.message}")
             }
         }
     }
 
-    private fun buildUI() {
-        input = EditText(this)
+    fun runSetup() {
+        log("== SETUP ==")
+        sh("""
+            cd ${home.absolutePath} || exit 1
+            mkdir -p bin
+            cd bin
 
-        val runBtn = Button(this).apply { text = "EXECUTE"; setOnClickListener { sendCommand() } }
-        val homeBtn = Button(this).apply { text = "HOME"; setOnClickListener { goHome() } }
-        val storageBtn = Button(this).apply { text = "STORAGE"; setOnClickListener { goStorage() } }
+            wget -O busybox https://busybox.net/downloads/binaries/1.31.1-defconfig-multiarch/busybox
+            chmod +x busybox
 
-        output = TextView(this).apply { text = "=== TERMINAL READY ===\n" }
-        scroll = ScrollView(this).apply { addView(output) }
+            wget -O dropbearmulti https://github.com/mkj/dropbear/releases/download/DROPBEAR_2022.83/dropbearmulti
+            chmod +x dropbearmulti
 
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(30, 40, 30, 40)
-            addView(input)
-            addView(runBtn)
-            addView(homeBtn)
-            addView(storageBtn)
-            addView(scroll)
-        }
+            ln -s dropbearmulti ssh
 
-        setContentView(layout)
+            wget -O python https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-3.11.7+20240107-x86_64-unknown-linux-gnu-install_only.tar.gz
+
+            echo SETUP DONE
+        """.trimIndent())
     }
 
-    private fun sendCommand() {
-        val cmd = input.text.toString()
-        if (cmd.isBlank()) return
-
-        append("\n$ $cmd\n")
-        thread { shellIn.write(cmd); shellIn.newLine(); shellIn.flush() }
-        input.text.clear()
-    }
-
-    private fun goHome() {
-        val homeDir = File(filesDir, "home")
-        append("\n$ cd ${homeDir.absolutePath}\n")
-        shellIn.write("cd ${homeDir.absolutePath}")
-        shellIn.newLine()
-        shellIn.flush()
-        currentDir = homeDir
-    }
-
-    private fun goStorage() {
-        val storageDir = File("/storage/emulated/0")
-        append("\n$ cd /storage/emulated/0\n")
-        shellIn.write("cd /storage/emulated/0")
-        shellIn.newLine()
-        shellIn.flush()
-        currentDir = storageDir
-    }
-
-    private fun append(t: String) {
-        output.append(t)
-        scroll.post { scroll.fullScroll(ScrollView.FOCUS_DOWN) }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        shell.destroy()
+    fun runStream() {
+        log("== STREAM ==")
+        sh("""
+            cd ${home.absolutePath} || exit 1
+            ./bin/busybox sh -c "
+              python -m http.server 8080 &
+              ./bin/ssh -R 80:localhost:8080 nokey@localhost.run
+            "
+        """.trimIndent())
     }
 }
