@@ -1,81 +1,104 @@
 package com.example.myapp
 
 import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.widget.*
-import kotlin.concurrent.thread
-import java.io.File
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.setPadding
+import kotlinx.coroutines.*
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
 
 class MainActivity : Activity() {
 
-    lateinit var out: TextView
-    lateinit var home: File
+    private lateinit var ipInput: EditText
+    private lateinit var fileUri: Uri
+    private lateinit var statusBox: TextView
 
-    override fun onCreate(b: Bundle?) {
-        super.onCreate(b)
-
-        home = File(filesDir, "home")
-        home.mkdirs()
-
-        val setup = Button(this).apply { text = "SETUP" }
-        val stream = Button(this).apply { text = "STREAM" }
-        out = TextView(this)
-
-        setup.setOnClickListener { runSetup() }
-        stream.setOnClickListener { runStream() }
-
-        val l = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(setup)
-            addView(stream)
-            addView(ScrollView(this@MainActivity).apply { addView(out) })
+    private val pickFile = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            fileUri = uri
+            statusBox.append("Selected file: ${getFileName(uri)}\n")
         }
-        setContentView(l)
     }
 
-    fun log(s: String) = runOnUiThread { out.append(s + "\n") }
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
 
-    fun sh(cmd: String) {
-        thread {
+        ipInput = EditText(this).apply { hint = "Enter public IP" }
+        val pickButton = Button(this).apply { text = "Pick Media"; setOnClickListener { pickFile.launch("*/*") } }
+        val sendButton = Button(this).apply { text = "Send"; setOnClickListener { uploadFile() } }
+        statusBox = TextView(this).apply { setPadding(20) }
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(40)
+            addView(TextView(this@MainActivity).apply { text = "Public IP:" })
+            addView(ipInput)
+            addView(pickButton)
+            addView(sendButton)
+            addView(TextView(this@MainActivity).apply { text = "\nStatus:" })
+            addView(statusBox)
+        }
+
+        setContentView(layout)
+    }
+
+    private fun uploadFile() {
+        if (!::fileUri.isInitialized) {
+            statusBox.append("No file selected\n")
+            return
+        }
+        val ip = ipInput.text.toString().trim()
+        if (ip.isEmpty()) {
+            statusBox.append("Enter IP\n")
+            return
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
             try {
-                val p = Runtime.getRuntime().exec(arrayOf("sh","-c",cmd))
-                log(p.inputStream.bufferedReader().readText())
-                log(p.errorStream.bufferedReader().readText())
+                val url = URL("http://$ip:8080/upload")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.doOutput = true
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=*****")
+
+                val out = conn.outputStream.bufferedWriter()
+                val inputStream = contentResolver.openInputStream(fileUri)
+                val fileBytes = inputStream!!.readBytes()
+                out.write("--*****\r\nContent-Disposition: form-data; name=\"file\"; filename=\"${getFileName(fileUri)}\"\r\n\r\n")
+                out.flush()
+                conn.outputStream.write(fileBytes)
+                conn.outputStream.flush()
+                out.write("\r\n--*****--\r\n")
+                out.flush()
+                conn.outputStream.close()
+
+                val response = conn.inputStream.bufferedReader().readText()
+                withContext(Dispatchers.Main) {
+                    statusBox.append("Server response: $response\n")
+                }
+
             } catch (e: Exception) {
-                log("ERR: ${e.message}")
+                withContext(Dispatchers.Main) {
+                    statusBox.append("Error: ${e.message}\n")
+                }
             }
         }
     }
 
-    fun runSetup() {
-        log("== SETUP ==")
-        sh("""
-            cd ${home.absolutePath} || exit 1
-            mkdir -p bin
-            cd bin
-
-            wget -O busybox https://busybox.net/downloads/binaries/1.31.1-defconfig-multiarch/busybox
-            chmod +x busybox
-
-            wget -O dropbearmulti https://github.com/mkj/dropbear/releases/download/DROPBEAR_2022.83/dropbearmulti
-            chmod +x dropbearmulti
-
-            ln -s dropbearmulti ssh
-
-            wget -O python https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-3.11.7+20240107-x86_64-unknown-linux-gnu-install_only.tar.gz
-
-            echo SETUP DONE
-        """.trimIndent())
-    }
-
-    fun runStream() {
-        log("== STREAM ==")
-        sh("""
-            cd ${home.absolutePath} || exit 1
-            ./bin/busybox sh -c "
-              python -m http.server 8080 &
-              ./bin/ssh -R 80:localhost:8080 nokey@localhost.run
-            "
-        """.trimIndent())
+    private fun getFileName(uri: Uri): String {
+        var name = "file"
+        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (index >= 0) name = cursor.getString(index)
+            }
+        }
+        return name
     }
 }
