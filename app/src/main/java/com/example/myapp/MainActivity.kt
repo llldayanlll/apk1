@@ -14,7 +14,7 @@ import java.net.URL
 
 class MainActivity : Activity() {
 
-    private lateinit var ipInput: EditText
+    private lateinit var urlInput: EditText
     private var fileUri: Uri? = null
     private lateinit var statusBox: TextView
 
@@ -23,7 +23,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        ipInput = EditText(this).apply { hint = "Enter public IP" }
+        urlInput = EditText(this).apply { hint = "Enter full public URL (https://...)" }
         val pickButton = Button(this).apply { 
             text = "Pick Media"
             setOnClickListener { pickFile() }
@@ -37,8 +37,8 @@ class MainActivity : Activity() {
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(40)
-            addView(TextView(this@MainActivity).apply { text = "Public IP:" })
-            addView(ipInput)
+            addView(TextView(this@MainActivity).apply { text = "Public URL:" })
+            addView(urlInput)
             addView(pickButton)
             addView(sendButton)
             addView(TextView(this@MainActivity).apply { text = "\nStatus:" })
@@ -68,15 +68,15 @@ class MainActivity : Activity() {
             statusBox.append("No file selected\n")
             return
         }
-        val ip = ipInput.text.toString().trim()
-        if (ip.isEmpty()) {
-            statusBox.append("Enter IP\n")
+        val publicUrl = urlInput.text.toString().trim()
+        if (publicUrl.isEmpty()) {
+            statusBox.append("Enter public URL\n")
             return
         }
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val url = URL("http://$ip:8080/upload")
+                val url = URL(publicUrl)
                 val conn = url.openConnection() as HttpURLConnection
                 conn.doOutput = true
                 conn.requestMethod = "POST"
