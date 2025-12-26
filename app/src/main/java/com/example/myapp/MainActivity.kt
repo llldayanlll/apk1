@@ -1,96 +1,91 @@
 package com.example.myapp
 
 import android.app.Activity
-import android.os.Bundle
-import android.widget.*
 import android.content.Intent
 import android.net.Uri
-import java.net.HttpURLConnection
-import java.net.URL
-import kotlin.concurrent.thread
-import org.json.JSONObject
+import android.os.Bundle
+import android.widget.*
+import android.provider.DocumentsContract
+import android.provider.MediaStore
 
 class MainActivity : Activity() {
 
-    private lateinit var log: TextView
-    private var authToken: String? = null
-    private val PICK = 101
+    private lateinit var emailInput: EditText
+    private lateinit var passInput: EditText
+    private lateinit var statusBox: TextView
+    private var selectedUris: MutableList<Uri> = mutableListOf()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val email = EditText(this).apply { hint = "pCloud Email" }
-        val pass = EditText(this).apply {
-            hint = "Password"
-            inputType = 129
-        }
-
-        val login = Button(this).apply {
-            text = "LOGIN"
-            setOnClickListener {
-                thread {
-                    val url = URL("https://api.pcloud.com/login?getauth=1&username=${email.text}&password=${pass.text}")
-                    val res = url.readText()
-                    val json = JSONObject(res)
-                    if (json.getInt("result") == 0) {
-                        authToken = json.getString("auth")
-                        runOnUiThread { log.append("Login OK\n") }
-                    } else {
-                        runOnUiThread { log.append("Login failed\n") }
-                    }
-                }
-            }
-        }
-
-        val pick = Button(this).apply {
-            text = "PICK MEDIA"
-            setOnClickListener {
-                val i = Intent(Intent.ACTION_OPEN_DOCUMENT)
-                i.type = "*/*"
-                i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                startActivityForResult(i, PICK)
-            }
-        }
-
-        log = TextView(this)
-
-        val l = LinearLayout(this).apply {
+        val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(email)
-            addView(pass)
-            addView(login)
-            addView(pick)
-            addView(log)
+            setPadding(40, 60, 40, 60)
         }
 
-        setContentView(l)
+        emailInput = EditText(this).apply {
+            hint = "pCloud Email"
+        }
+
+        passInput = EditText(this).apply {
+            hint = "pCloud Password"
+        }
+
+        val pickBtn = Button(this).apply {
+            text = "PICK MEDIA"
+            setOnClickListener { pickMedia() }
+        }
+
+        val sendBtn = Button(this).apply {
+            text = "SEND"
+            setOnClickListener { sendFiles() }
+        }
+
+        statusBox = TextView(this).apply {
+            text = "Status:\n"
+        }
+
+        layout.addView(emailInput)
+        layout.addView(passInput)
+        layout.addView(pickBtn)
+        layout.addView(sendBtn)
+        layout.addView(statusBox)
+
+        setContentView(layout)
     }
 
-    override fun onActivityResult(req: Int, res: Int, data: Intent?) {
-        super.onActivityResult(req, res, data)
-        if (req == PICK && res == RESULT_OK && authToken != null) {
-            val uris = mutableListOf<Uri>()
+    private fun pickMedia() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        }
+        startActivityForResult(intent, 100)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 100 && resultCode == RESULT_OK) {
+            selectedUris.clear()
+
             data?.clipData?.let {
-                for (i in 0 until it.itemCount) uris.add(it.getItemAt(i).uri)
-            } ?: data?.data?.let { uris.add(it) }
+                for (i in 0 until it.itemCount) {
+                    selectedUris.add(it.getItemAt(i).uri)
+                }
+            } ?: data?.data?.let {
+                selectedUris.add(it)
+            }
 
-            uris.forEach { upload(it) }
+            statusBox.append("Selected files: ${selectedUris.size}\n")
         }
     }
 
-    private fun upload(uri: Uri) {
-        thread {
-            try {
-                val stream = contentResolver.openInputStream(uri)!!
-                val url = URL("https://api.pcloud.com/uploadfile?auth=$authToken")
-                val conn = url.openConnection() as HttpURLConnection
-                conn.doOutput = true
-                conn.requestMethod = "POST"
-                stream.copyTo(conn.outputStream)
-                runOnUiThread { log.append("Uploaded\n") }
-            } catch (e: Exception) {
-                runOnUiThread { log.append("Error\n") }
-            }
+    private fun sendFiles() {
+        if (selectedUris.isEmpty()) {
+            statusBox.append("No files selected\n")
+            return
         }
+        statusBox.append("Send pressed. Ready to upload ${selectedUris.size} files.\n")
+        // pCloud upload logic hooks HERE (next step)
     }
 }
