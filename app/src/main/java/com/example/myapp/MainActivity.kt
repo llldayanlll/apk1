@@ -12,27 +12,24 @@ import android.Manifest
 import android.content.pm.PackageManager
 import kotlin.concurrent.thread
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 
 class MainActivity : Activity() {
 
-    private lateinit var linkInput: EditText
     private lateinit var pickButton: Button
     private lateinit var sendButton: Button
     private lateinit var statusText: TextView
+    private lateinit var linkInput: EditText
     private var selectedUris: MutableList<Uri> = mutableListOf()
+
     private val PERMISSIONS = arrayOf(
         Manifest.permission.READ_EXTERNAL_STORAGE,
         Manifest.permission.INTERNET
     )
 
-    private val pickFilesLauncher = registerForActivityResult(
-        ActivityResultContracts.GetMultipleContents()
-    ) { uris ->
+    private val pickMediaLauncher = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         if (uris != null) {
-            selectedUris = uris.toMutableList()
-            statusText.text = "Selected files:\n" + selectedUris.joinToString("\n") { it.path ?: it.toString() }
+            selectedUris.addAll(uris)
+            statusText.text = "Ready to upload ${selectedUris.size} files"
         }
     }
 
@@ -44,71 +41,83 @@ class MainActivity : Activity() {
             setPadding(40, 60, 40, 60)
         }
 
-        linkInput = EditText(this).apply { hint = "Enter your upload link here" }
-        pickButton = Button(this).apply { text = "PICK MEDIA" }
-        sendButton = Button(this).apply { text = "SEND" }
-        statusText = TextView(this).apply { text = "Status:\n" }
+        linkInput = EditText(this).apply {
+            hint = "Enter pCloud upload link"
+        }
+
+        pickButton = Button(this).apply {
+            text = "Pick Media"
+            setOnClickListener { pickMedia() }
+        }
+
+        sendButton = Button(this).apply {
+            text = "SEND"
+            setOnClickListener { sendFiles() }
+        }
+
+        statusText = TextView(this).apply {
+            text = "Status:\n"
+        }
 
         layout.addView(linkInput)
         layout.addView(pickButton)
         layout.addView(sendButton)
         layout.addView(statusText)
+
         setContentView(layout)
 
-        checkPermissions()
+        checkAndRequestPermissions()
+    }
 
-        pickButton.setOnClickListener {
-            pickFilesLauncher.launch("*/*") // allow all file types
+    private fun checkAndRequestPermissions() {
+        val missingPerms = PERMISSIONS.filter { perm ->
+            ContextCompat.checkSelfPermission(this, perm) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missingPerms.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, missingPerms.toTypedArray(), 100)
+        }
+    }
+
+    private fun pickMedia() {
+        pickMediaLauncher.launch("*/*")
+    }
+
+    private fun sendFiles() {
+        val link = linkInput.text.toString().trim()
+        if (link.isEmpty()) {
+            statusText.text = "Error: Upload link required"
+            return
+        }
+        if (selectedUris.isEmpty()) {
+            statusText.text = "Error: No files selected"
+            return
         }
 
-        sendButton.setOnClickListener {
-            val uploadUrl = linkInput.text.toString().trim()
-            if (uploadUrl.isEmpty()) {
-                statusText.append("\nError: Upload link empty")
-                return@setOnClickListener
-            }
-            if (selectedUris.isEmpty()) {
-                statusText.append("\nError: No file selected")
-                return@setOnClickListener
-            }
+        statusText.text = "Uploading ${selectedUris.size} files...\n"
 
-            selectedUris.forEach { uri ->
-                statusText.append("\nUploading ${uri.lastPathSegment}...")
-                thread {
-                    try {
-                        val inputStream = contentResolver.openInputStream(uri)
-                        val url = URL(uploadUrl)
-                        val conn = url.openConnection() as HttpURLConnection
-                        conn.requestMethod = "POST"
-                        conn.doOutput = true
-                        inputStream?.use { inp ->
-                            conn.outputStream.use { out ->
-                                inp.copyTo(out)
-                            }
-                        }
-                        val response = conn.inputStream.bufferedReader().readText()
-                        runOnUiThread { statusText.append("\nUploaded ${uri.lastPathSegment}: $response") }
-                    } catch (e: Exception) {
-                        runOnUiThread { statusText.append("\nError uploading ${uri.lastPathSegment}: ${e.message}") }
+        thread {
+            for (uri in selectedUris) {
+                try {
+                    val inputStream = contentResolver.openInputStream(uri)
+                    val fileName = File(uri.path ?: "file").name
+                    val url = java.net.URL("https://api.pcloud.com/uploadtolink?code=$link&filename=$fileName")
+                    val conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.doOutput = true
+                    inputStream?.copyTo(conn.outputStream)
+                    val respCode = conn.responseCode
+                    runOnUiThread {
+                        statusText.append("$fileName uploaded. Server response: $respCode\n")
+                    }
+                    inputStream?.close()
+                    conn.disconnect()
+                } catch (e: Exception) {
+                    runOnUiThread {
+                        statusText.append("Error uploading ${uri.path}: ${e.message}\n")
                     }
                 }
             }
+            selectedUris.clear()
         }
-    }
-
-    private fun checkPermissions() {
-        val missing = PERMISSIONS.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-        if (missing.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, missing.toTypedArray(), 100)
-        }
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        statusText.append("\nPermissions granted. Ready to pick files.")
     }
 }
