@@ -14,6 +14,7 @@ import java.net.URL
 
 class MainActivity : Activity() {
 
+    private lateinit var linkInput: EditText
     private lateinit var pickButton: Button
     private lateinit var sendButton: Button
     private lateinit var statusText: TextView
@@ -32,10 +33,15 @@ class MainActivity : Activity() {
             setPadding(40, 60, 40, 60)
         }
 
+        linkInput = EditText(this).apply {
+            hint = "Enter your upload link here"
+        }
+
         pickButton = Button(this).apply { text = "PICK MEDIA" }
         sendButton = Button(this).apply { text = "SEND" }
         statusText = TextView(this).apply { text = "Status:\n" }
 
+        layout.addView(linkInput)
         layout.addView(pickButton)
         layout.addView(sendButton)
         layout.addView(statusText)
@@ -45,17 +51,23 @@ class MainActivity : Activity() {
         checkPermissions()
 
         pickButton.setOnClickListener {
-            // minimal: simulate selecting a file
-            selectedFile = File("/sdcard/Download/example.jpg") // replace with real file picking
+            // simulate file selection
+            selectedFile = File("/sdcard/Download/example.jpg") // replace with actual file picker
             statusText.text = "Selected file: ${selectedFile?.name}"
         }
 
         sendButton.setOnClickListener {
+            val uploadUrl = linkInput.text.toString().trim()
+            if (uploadUrl.isEmpty()) {
+                statusText.append("\nError: Upload link empty")
+                return@setOnClickListener
+            }
+
             selectedFile?.let { file ->
                 statusText.append("\nUploading ${file.name}...")
                 thread {
                     try {
-                        val url = URL("YOUR_UPLOAD_URL_HERE") // replace with actual URL
+                        val url = URL(uploadUrl)
                         val conn = url.openConnection() as HttpURLConnection
                         conn.requestMethod = "POST"
                         conn.doOutput = true
@@ -68,6 +80,8 @@ class MainActivity : Activity() {
                         runOnUiThread { statusText.append("\nError: ${e.message}") }
                     }
                 }
+            } ?: run {
+                statusText.append("\nError: No file selected")
             }
         }
     }
