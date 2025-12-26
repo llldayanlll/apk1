@@ -1,19 +1,28 @@
 package com.example.myapp
 
 import android.app.Activity
-import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.widget.*
-import android.provider.DocumentsContract
-import android.provider.MediaStore
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import android.Manifest
+import android.content.pm.PackageManager
+import kotlin.concurrent.thread
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 
 class MainActivity : Activity() {
 
-    private lateinit var emailInput: EditText
-    private lateinit var passInput: EditText
-    private lateinit var statusBox: TextView
-    private var selectedUris: MutableList<Uri> = mutableListOf()
+    private lateinit var pickButton: Button
+    private lateinit var sendButton: Button
+    private lateinit var statusText: TextView
+    private var selectedFile: File? = null
+    private val PERMISSIONS = arrayOf(
+        Manifest.permission.READ_EXTERNAL_STORAGE,
+        Manifest.permission.WRITE_EXTERNAL_STORAGE,
+        Manifest.permission.INTERNET
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -23,69 +32,59 @@ class MainActivity : Activity() {
             setPadding(40, 60, 40, 60)
         }
 
-        emailInput = EditText(this).apply {
-            hint = "pCloud Email"
-        }
+        pickButton = Button(this).apply { text = "PICK MEDIA" }
+        sendButton = Button(this).apply { text = "SEND" }
+        statusText = TextView(this).apply { text = "Status:\n" }
 
-        passInput = EditText(this).apply {
-            hint = "pCloud Password"
-        }
-
-        val pickBtn = Button(this).apply {
-            text = "PICK MEDIA"
-            setOnClickListener { pickMedia() }
-        }
-
-        val sendBtn = Button(this).apply {
-            text = "SEND"
-            setOnClickListener { sendFiles() }
-        }
-
-        statusBox = TextView(this).apply {
-            text = "Status:\n"
-        }
-
-        layout.addView(emailInput)
-        layout.addView(passInput)
-        layout.addView(pickBtn)
-        layout.addView(sendBtn)
-        layout.addView(statusBox)
+        layout.addView(pickButton)
+        layout.addView(sendButton)
+        layout.addView(statusText)
 
         setContentView(layout)
-    }
 
-    private fun pickMedia() {
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"
-            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        checkPermissions()
+
+        pickButton.setOnClickListener {
+            // minimal: simulate selecting a file
+            selectedFile = File("/sdcard/Download/example.jpg") // replace with real file picking
+            statusText.text = "Selected file: ${selectedFile?.name}"
         }
-        startActivityForResult(intent, 100)
-    }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 100 && resultCode == RESULT_OK) {
-            selectedUris.clear()
-
-            data?.clipData?.let {
-                for (i in 0 until it.itemCount) {
-                    selectedUris.add(it.getItemAt(i).uri)
+        sendButton.setOnClickListener {
+            selectedFile?.let { file ->
+                statusText.append("\nUploading ${file.name}...")
+                thread {
+                    try {
+                        val url = URL("YOUR_UPLOAD_URL_HERE") // replace with actual URL
+                        val conn = url.openConnection() as HttpURLConnection
+                        conn.requestMethod = "POST"
+                        conn.doOutput = true
+                        conn.outputStream.use { out ->
+                            out.write(file.readBytes())
+                        }
+                        val response = conn.inputStream.bufferedReader().readText()
+                        runOnUiThread { statusText.append("\nUpload finished: $response") }
+                    } catch (e: Exception) {
+                        runOnUiThread { statusText.append("\nError: ${e.message}") }
+                    }
                 }
-            } ?: data?.data?.let {
-                selectedUris.add(it)
             }
-
-            statusBox.append("Selected files: ${selectedUris.size}\n")
         }
     }
 
-    private fun sendFiles() {
-        if (selectedUris.isEmpty()) {
-            statusBox.append("No files selected\n")
-            return
+    private fun checkPermissions() {
+        val missing = PERMISSIONS.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-        statusBox.append("Send pressed. Ready to upload ${selectedUris.size} files.\n")
-        // pCloud upload logic hooks HERE (next step)
+        if (missing.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, missing.toTypedArray(), 100)
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        statusText.append("\nPermissions granted. Ready to pick files.")
     }
 }
