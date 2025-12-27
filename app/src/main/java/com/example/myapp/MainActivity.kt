@@ -1,31 +1,41 @@
 package com.example.myapp
 
+import android.app.Activity
 import android.os.Bundle
 import android.widget.*
 import android.net.Uri
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.Manifest
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.activity.result.contract.ActivityResultContracts
 import kotlin.concurrent.thread
 import okhttp3.*
 import java.io.InputStream
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : Activity() {
 
     private lateinit var uploadUrlInput: EditText
     private lateinit var outputText: TextView
     private lateinit var scrollView: ScrollView
-    private lateinit var pickButton: Button
+    private lateinit var selectButton: Button
     private lateinit var sendButton: Button
-    private var selectedUris: List<Uri> = emptyList()
 
     private val PERMISSIONS = arrayOf(
         Manifest.permission.READ_EXTERNAL_STORAGE
     )
-    private val PICK_FILES_REQUEST = 101
+
+    private var selectedUris: List<Uri> = listOf()
+
+    private val pickMedia =
+        registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+            if (uris.isNotEmpty()) {
+                selectedUris = uris
+                appendOutput("Selected ${uris.size} file(s)\n")
+            } else {
+                appendOutput("No files selected\n")
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,19 +44,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun createUI() {
+
         val title = TextView(this).apply {
             text = "Koofr Uploader"
             textSize = 22f
         }
 
         uploadUrlInput = EditText(this).apply {
-            hint = "Paste Koofr upload link here"
+            hint = "Paste Koofr upload link code here"
             setPadding(20, 20, 20, 20)
         }
 
-        pickButton = Button(this).apply {
+        selectButton = Button(this).apply {
             text = "SELECT FILES"
-            setOnClickListener { pickFiles() }
+            setOnClickListener {
+                pickMedia.launch("*/*")
+            }
         }
 
         sendButton = Button(this).apply {
@@ -55,7 +68,7 @@ class MainActivity : AppCompatActivity() {
                 if (selectedUris.isNotEmpty()) {
                     uploadFiles(selectedUris)
                 } else {
-                    appendOutput("No files selected to send\n")
+                    appendOutput("No files selected\n")
                 }
             }
         }
@@ -74,7 +87,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(40, 60, 40, 60)
             addView(title)
             addView(uploadUrlInput)
-            addView(pickButton)
+            addView(selectButton)
             addView(sendButton)
             addView(scrollView)
         }
@@ -86,77 +99,54 @@ class MainActivity : AppCompatActivity() {
         val missing = PERMISSIONS.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
+
         if (missing.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, missing.toTypedArray(), 100)
         }
     }
 
-    private fun pickFiles() {
-        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-            type = "*/*"
-            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-        }
-        startActivityForResult(Intent.createChooser(intent, "Select files"), PICK_FILES_REQUEST)
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == PICK_FILES_REQUEST && resultCode == RESULT_OK) {
-            val uris = mutableListOf<Uri>()
-            data?.data?.let { uris.add(it) }
-            data?.clipData?.let { clip ->
-                for (i in 0 until clip.itemCount) {
-                    uris.add(clip.getItemAt(i).uri)
-                }
-            }
-            if (uris.isNotEmpty()) {
-                selectedUris = uris
-                appendOutput("Selected ${uris.size} files\n")
-            } else {
-                appendOutput("No files selected\n")
-            }
-        }
-    }
-
     private fun uploadFiles(uris: List<Uri>) {
-        val uploadUrl = uploadUrlInput.text.toString().trim()
-        if (uploadUrl.isEmpty()) {
-            appendOutput("ERROR: Upload link missing\n")
+        val uploadCode = uploadUrlInput.text.toString().trim()
+
+        if (uploadCode.isEmpty()) {
+            appendOutput("ERROR: Upload link code missing\n")
             return
         }
 
         thread {
             val client = OkHttpClient()
+
             for (uri in uris) {
                 try {
-                    runOnUiThread { appendOutput("Uploading: $uri\n") }
+                    runOnUiThread {
+                        appendOutput("Uploading: $uri\n")
+                    }
 
                     val inputStream: InputStream? = contentResolver.openInputStream(uri)
-                    val fileName = uri.lastPathSegment ?: "upload_file"
+                    val fileName = uri.lastPathSegment ?: "file"
 
-                    val requestBody = inputStream?.let { stream ->
-                        object : RequestBody() {
-                            override fun contentType() = MediaType.parse("application/octet-stream")
-                            override fun writeTo(sink: okio.BufferedSink) {
-                                stream.source().use { source -> sink.writeAll(source) }
-                            }
-                        }
+                    val requestBody = inputStream?.readBytes()?.let { bytes ->
+                        RequestBody.create(MediaType.parse("application/octet-stream"), bytes)
                     } ?: continue
 
                     val request = Request.Builder()
-                        .url(uploadUrl)
-                        .post(MultipartBody.Builder()
-                            .setType(MultipartBody.FORM)
-                            .addFormDataPart("file", fileName, requestBody)
-                            .build())
+                        .url("https://api.koofr.net/v1/uploadlink/$uploadCode")
+                        .post(requestBody)
                         .build()
 
                     val response = client.newCall(request).execute()
-                    if (!response.isSuccessful) throw Exception("HTTP ${response.code()}")
-                    runOnUiThread { appendOutput("SUCCESS: $uri\n") }
+                    if (!response.isSuccessful) {
+                        throw Exception("HTTP ${response.code()}")
+                    }
+
+                    runOnUiThread {
+                        appendOutput("SUCCESS: $fileName\n")
+                    }
 
                 } catch (e: Exception) {
-                    runOnUiThread { appendOutput("FAILED: ${e.message}\n") }
+                    runOnUiThread {
+                        appendOutput("FAILED: ${e.message}\n")
+                    }
                 }
             }
         }
@@ -164,6 +154,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun appendOutput(text: String) {
         outputText.append(text)
-        scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
+        scrollView.post {
+            scrollView.fullScroll(ScrollView.FOCUS_DOWN)
+        }
     }
 }

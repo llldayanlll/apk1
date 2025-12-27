@@ -36,5 +36,5 @@ kotlin {
 dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.core:core-ktx:1.12.0")
-    implementation("com.squareup.okhttp3:okhttp:4.11.0") // ✅ Added OkHttp
+    implementation("com.squareup.okhttp3:okhttp:3.14.9")
 }
