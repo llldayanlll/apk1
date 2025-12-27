@@ -8,29 +8,57 @@ import android.content.pm.PackageManager
 import android.Manifest
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.activity.result.contract.ActivityResultContracts
 import kotlin.concurrent.thread
-import java.io.*
 import java.net.HttpURLConnection
 import java.net.URL
+import java.io.DataOutputStream
+import javax.net.ssl.*
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
 
 class MainActivity : Activity() {
 
     private lateinit var uploadUrlInput: EditText
     private lateinit var outputText: TextView
     private lateinit var scrollView: ScrollView
-    private lateinit var pickButton: Button
-    private lateinit var sendButton: Button
 
     private val PERMISSIONS = arrayOf(
         Manifest.permission.READ_EXTERNAL_STORAGE
     )
 
-    private var selectedUris: List<Uri> = emptyList()
+    private val pickMedia =
+        registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> ->
+            if (uris.isNotEmpty()) {
+                uploadFiles(uris)
+            } else {
+                appendOutput("No files selected\n")
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        trustAllCertificates()  // Disable SSL check (Android 6 fix)
+
         createUI()
         checkAndRequestPermissions()
+    }
+
+    private fun trustAllCertificates() {
+        val trustAllCerts = arrayOf<TrustManager>(
+            object : X509TrustManager {
+                override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {}
+                override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {}
+                override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+            }
+        )
+
+        val sslContext = SSLContext.getInstance("SSL")
+        sslContext.init(null, trustAllCerts, SecureRandom())
+
+        HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.socketFactory)
+        HttpsURLConnection.setDefaultHostnameVerifier { _, _ -> true }
     }
 
     private fun createUI() {
@@ -45,21 +73,10 @@ class MainActivity : Activity() {
             setPadding(20, 20, 20, 20)
         }
 
-        pickButton = Button(this).apply {
+        val pickButton = Button(this).apply {
             text = "SELECT FILES"
             setOnClickListener {
-                pickFiles()
-            }
-        }
-
-        sendButton = Button(this).apply {
-            text = "SEND FILES"
-            setOnClickListener {
-                if (selectedUris.isNotEmpty()) {
-                    uploadFiles(selectedUris)
-                } else {
-                    appendOutput("No files selected\n")
-                }
+                pickMedia.launch("*/*")
             }
         }
 
@@ -78,7 +95,6 @@ class MainActivity : Activity() {
             addView(title)
             addView(uploadUrlInput)
             addView(pickButton)
-            addView(sendButton)
             addView(scrollView)
         }
 
@@ -95,31 +111,6 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun pickFiles() {
-        val intent = android.content.Intent().apply {
-            type = "*/*"
-            putExtra(android.content.Intent.EXTRA_ALLOW_MULTIPLE, true)
-            action = android.content.Intent.ACTION_GET_CONTENT
-        }
-        startActivityForResult(
-            android.content.Intent.createChooser(intent, "Select files"),
-            101
-        )
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 101 && resultCode == RESULT_OK) {
-            selectedUris = mutableListOf<Uri>().apply {
-                data?.data?.let { add(it) }
-                data?.clipData?.let { clip ->
-                    for (i in 0 until clip.itemCount) add(clip.getItemAt(i).uri)
-                }
-            }
-            appendOutput("${selectedUris.size} file(s) selected\n")
-        }
-    }
-
     private fun uploadFiles(uris: List<Uri>) {
         val uploadUrl = uploadUrlInput.text.toString().trim()
 
@@ -131,11 +122,20 @@ class MainActivity : Activity() {
         thread {
             for (uri in uris) {
                 try {
-                    runOnUiThread { appendOutput("Uploading: $uri\n") }
+                    runOnUiThread {
+                        appendOutput("Uploading: $uri\n")
+                    }
+
                     uploadSingleFile(uploadUrl, uri)
-                    runOnUiThread { appendOutput("SUCCESS: $uri\n") }
+
+                    runOnUiThread {
+                        appendOutput("SUCCESS: $uri\n")
+                    }
+
                 } catch (e: Exception) {
-                    runOnUiThread { appendOutput("FAILED: ${e.message}\n") }
+                    runOnUiThread {
+                        appendOutput("FAILED: ${e.message}\n")
+                    }
                 }
             }
         }
@@ -149,6 +149,7 @@ class MainActivity : Activity() {
 
         val url = URL(uploadUrl)
         val connection = url.openConnection() as HttpURLConnection
+
         connection.apply {
             doOutput = true
             doInput = true
@@ -160,6 +161,7 @@ class MainActivity : Activity() {
         }
 
         val outputStream = DataOutputStream(connection.outputStream)
+
         val fileName = uri.lastPathSegment ?: "upload_file"
         val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
 
@@ -180,12 +182,18 @@ class MainActivity : Activity() {
         outputStream.close()
 
         val responseCode = connection.responseCode
-        if (responseCode !in 200..299) throw Exception("HTTP $responseCode")
+        if (responseCode !in 200..299) {
+            throw Exception("HTTP $responseCode")
+        }
+
         connection.disconnect()
     }
 
     private fun appendOutput(text: String) {
         outputText.append(text)
-        scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
+        scrollView.post {
+            scrollView.fullScroll(ScrollView.FOCUS_DOWN)
+        }
     }
 }
+
