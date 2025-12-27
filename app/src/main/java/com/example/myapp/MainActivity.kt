@@ -19,12 +19,11 @@ class MainActivity : Activity() {
     private lateinit var uploadUrlInput: EditText
     private lateinit var outputText: TextView
     private lateinit var scrollView: ScrollView
+    private var selectedUris: List<Uri> = emptyList()
 
     private val PERMISSIONS = arrayOf(
         Manifest.permission.READ_EXTERNAL_STORAGE
     )
-
-    private val PICK_FILES_CODE = 101
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,29 +34,26 @@ class MainActivity : Activity() {
     private fun createUI() {
 
         val title = TextView(this).apply {
-            text = "pCloud Uploader"
+            text = "pCloud Form Upload (Test)"
             textSize = 22f
         }
 
         uploadUrlInput = EditText(this).apply {
             hint = "Paste pCloud upload link here"
-            setPadding(20, 20, 20, 20)
         }
 
         val pickButton = Button(this).apply {
             text = "SELECT FILES"
-            setOnClickListener {
-                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                    type = "*/*"
-                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                }
-                startActivityForResult(intent, PICK_FILES_CODE)
-            }
+            setOnClickListener { pickFiles() }
+        }
+
+        val sendButton = Button(this).apply {
+            text = "SEND"
+            setOnClickListener { uploadFiles() }
         }
 
         outputText = TextView(this).apply {
             text = "=== Upload Log ===\n\n"
-            setPadding(20, 20, 20, 20)
         }
 
         scrollView = ScrollView(this).apply {
@@ -70,126 +66,107 @@ class MainActivity : Activity() {
             addView(title)
             addView(uploadUrlInput)
             addView(pickButton)
+            addView(sendButton)
             addView(scrollView)
         }
 
         setContentView(layout)
     }
 
-    private fun checkAndRequestPermissions() {
-        val missing = PERMISSIONS.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+    private fun pickFiles() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            type = "*/*"
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
         }
-
-        if (missing.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, missing.toTypedArray(), 100)
-        }
+        startActivityForResult(intent, 101)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
-        if (requestCode == PICK_FILES_CODE && resultCode == RESULT_OK && data != null) {
-            val uris = mutableListOf<Uri>()
+        if (requestCode == 101 && resultCode == RESULT_OK) {
+            val list = mutableListOf<Uri>()
 
-            data.clipData?.let { clip ->
-                for (i in 0 until clip.itemCount) {
-                    uris.add(clip.getItemAt(i).uri)
+            data?.clipData?.let {
+                for (i in 0 until it.itemCount) {
+                    list.add(it.getItemAt(i).uri)
                 }
-            } ?: data.data?.let {
-                uris.add(it)
+            } ?: data?.data?.let {
+                list.add(it)
             }
 
-            if (uris.isNotEmpty()) {
-                uploadFiles(uris)
-            } else {
-                appendOutput("No files selected\n")
-            }
+            selectedUris = list
+            appendOutput("Selected ${list.size} file(s)\n")
         }
     }
 
-    private fun uploadFiles(uris: List<Uri>) {
+    private fun uploadFiles() {
         val uploadUrl = uploadUrlInput.text.toString().trim()
-
-        if (uploadUrl.isEmpty()) {
-            appendOutput("ERROR: Upload link missing\n")
+        if (uploadUrl.isEmpty() || selectedUris.isEmpty()) {
+            appendOutput("ERROR: Missing link or files\n")
             return
         }
 
         thread {
-            for (uri in uris) {
+            for (uri in selectedUris) {
                 try {
-                    runOnUiThread {
-                        appendOutput("Uploading: $uri\n")
-                    }
-
-                    uploadSingleFile(uploadUrl, uri)
-
-                    runOnUiThread {
-                        appendOutput("SUCCESS: $uri\n")
-                    }
-
+                    runOnUiThread { appendOutput("Uploading: $uri\n") }
+                    uploadFormStyle(uploadUrl, uri)
+                    runOnUiThread { appendOutput("DONE: $uri\n") }
                 } catch (e: Exception) {
-                    runOnUiThread {
-                        appendOutput("FAILED: ${e.message}\n")
-                    }
+                    runOnUiThread { appendOutput("FAILED: ${e.message}\n") }
                 }
             }
         }
     }
 
-    private fun uploadSingleFile(uploadUrl: String, uri: Uri) {
+    private fun uploadFormStyle(uploadUrl: String, uri: Uri) {
 
-        val boundary = "----AndroidBoundary${System.currentTimeMillis()}"
+        val boundary = "----WebKitFormBoundary${System.currentTimeMillis()}"
         val lineEnd = "\r\n"
         val twoHyphens = "--"
 
-        val url = URL(uploadUrl)
-        val connection = url.openConnection() as HttpURLConnection
-
-        connection.apply {
+        val conn = (URL(uploadUrl).openConnection() as HttpURLConnection).apply {
             doOutput = true
-            doInput = true
             requestMethod = "POST"
-            setRequestProperty(
-                "Content-Type",
-                "multipart/form-data; boundary=$boundary"
-            )
+            setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
         }
 
-        val outputStream = DataOutputStream(connection.outputStream)
+        val out = DataOutputStream(conn.outputStream)
 
-        val fileName = uri.lastPathSegment ?: "upload_file"
-        val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
+        val fileName = uri.lastPathSegment ?: "file"
+        val mime = contentResolver.getType(uri) ?: "application/octet-stream"
 
-        outputStream.writeBytes(twoHyphens + boundary + lineEnd)
-        outputStream.writeBytes(
-            "Content-Disposition: form-data; name=\"file\"; filename=\"$fileName\"$lineEnd"
+        out.writeBytes(twoHyphens + boundary + lineEnd)
+        out.writeBytes(
+            "Content-Disposition: form-data; name=\"file[]\"; filename=\"$fileName\"$lineEnd"
         )
-        outputStream.writeBytes("Content-Type: $mimeType$lineEnd")
-        outputStream.writeBytes(lineEnd)
+        out.writeBytes("Content-Type: $mime$lineEnd$lineEnd")
 
-        contentResolver.openInputStream(uri)?.use { input ->
-            input.copyTo(outputStream)
+        contentResolver.openInputStream(uri)!!.copyTo(out)
+
+        out.writeBytes(lineEnd + twoHyphens + boundary + twoHyphens + lineEnd)
+        out.flush()
+        out.close()
+
+        if (conn.responseCode !in 200..399) {
+            throw Exception("HTTP ${conn.responseCode}")
         }
 
-        outputStream.writeBytes(lineEnd)
-        outputStream.writeBytes(twoHyphens + boundary + twoHyphens + lineEnd)
-        outputStream.flush()
-        outputStream.close()
+        conn.disconnect()
+    }
 
-        val responseCode = connection.responseCode
-        if (responseCode !in 200..299) {
-            throw Exception("HTTP $responseCode")
+    private fun checkAndRequestPermissions() {
+        val missing = PERMISSIONS.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-
-        connection.disconnect()
+        if (missing.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, missing.toTypedArray(), 100)
+        }
     }
 
     private fun appendOutput(text: String) {
         outputText.append(text)
-        scrollView.post {
-            scrollView.fullScroll(ScrollView.FOCUS_DOWN)
-        }
+        scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
     }
 }
