@@ -4,11 +4,11 @@ import android.app.Activity
 import android.os.Bundle
 import android.widget.*
 import android.net.Uri
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.Manifest
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.activity.result.contract.ActivityResultContracts
 import kotlin.concurrent.thread
 import java.net.HttpURLConnection
 import java.net.URL
@@ -24,14 +24,7 @@ class MainActivity : Activity() {
         Manifest.permission.READ_EXTERNAL_STORAGE
     )
 
-    private val pickMedia =
-        registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-            if (uris.isNotEmpty()) {
-                uploadFiles(uris)
-            } else {
-                appendOutput("No files selected\n")
-            }
-        }
+    private val PICK_FILES_CODE = 101
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,7 +47,11 @@ class MainActivity : Activity() {
         val pickButton = Button(this).apply {
             text = "SELECT FILES"
             setOnClickListener {
-                pickMedia.launch("*/*")
+                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    type = "*/*"
+                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                }
+                startActivityForResult(intent, PICK_FILES_CODE)
             }
         }
 
@@ -86,6 +83,28 @@ class MainActivity : Activity() {
 
         if (missing.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, missing.toTypedArray(), 100)
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == PICK_FILES_CODE && resultCode == RESULT_OK && data != null) {
+            val uris = mutableListOf<Uri>()
+
+            data.clipData?.let { clip ->
+                for (i in 0 until clip.itemCount) {
+                    uris.add(clip.getItemAt(i).uri)
+                }
+            } ?: data.data?.let {
+                uris.add(it)
+            }
+
+            if (uris.isNotEmpty()) {
+                uploadFiles(uris)
+            } else {
+                appendOutput("No files selected\n")
+            }
         }
     }
 
