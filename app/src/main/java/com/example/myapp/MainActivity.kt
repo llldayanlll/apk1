@@ -1,16 +1,15 @@
 package com.example.myapp
 
 import android.app.Activity
-import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.widget.*
-import android.Manifest
+import android.net.Uri
 import android.content.pm.PackageManager
+import android.Manifest
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import kotlin.concurrent.thread
-import java.io.DataOutputStream
+import java.io.*
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -19,15 +18,14 @@ class MainActivity : Activity() {
     private lateinit var uploadUrlInput: EditText
     private lateinit var outputText: TextView
     private lateinit var scrollView: ScrollView
-    private lateinit var selectButton: Button
+    private lateinit var pickButton: Button
     private lateinit var sendButton: Button
 
     private val PERMISSIONS = arrayOf(
         Manifest.permission.READ_EXTERNAL_STORAGE
     )
 
-    private var selectedUris: ArrayList<Uri> = arrayListOf()
-    private val PICK_FILES_REQUEST = 123
+    private var selectedUris: List<Uri> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,6 +34,7 @@ class MainActivity : Activity() {
     }
 
     private fun createUI() {
+
         val title = TextView(this).apply {
             text = "Koofr Uploader"
             textSize = 22f
@@ -46,14 +45,22 @@ class MainActivity : Activity() {
             setPadding(20, 20, 20, 20)
         }
 
-        selectButton = Button(this).apply {
+        pickButton = Button(this).apply {
             text = "SELECT FILES"
-            setOnClickListener { pickFiles() }
+            setOnClickListener {
+                pickFiles()
+            }
         }
 
         sendButton = Button(this).apply {
             text = "SEND FILES"
-            setOnClickListener { uploadFiles() }
+            setOnClickListener {
+                if (selectedUris.isNotEmpty()) {
+                    uploadFiles(selectedUris)
+                } else {
+                    appendOutput("No files selected\n")
+                }
+            }
         }
 
         outputText = TextView(this).apply {
@@ -70,7 +77,7 @@ class MainActivity : Activity() {
             setPadding(40, 60, 40, 60)
             addView(title)
             addView(uploadUrlInput)
-            addView(selectButton)
+            addView(pickButton)
             addView(sendButton)
             addView(scrollView)
         }
@@ -82,50 +89,47 @@ class MainActivity : Activity() {
         val missing = PERMISSIONS.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
+
         if (missing.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, missing.toTypedArray(), 100)
         }
     }
 
     private fun pickFiles() {
-        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+        val intent = android.content.Intent().apply {
             type = "*/*"
-            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            putExtra(android.content.Intent.EXTRA_ALLOW_MULTIPLE, true)
+            action = android.content.Intent.ACTION_GET_CONTENT
         }
-        startActivityForResult(Intent.createChooser(intent, "Select files"), PICK_FILES_REQUEST)
+        startActivityForResult(
+            android.content.Intent.createChooser(intent, "Select files"),
+            101
+        )
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == PICK_FILES_REQUEST && resultCode == RESULT_OK) {
-            selectedUris.clear()
-            data?.let {
-                val clip = it.clipData
-                if (clip != null) {
-                    for (i in 0 until clip.itemCount) {
-                        selectedUris.add(clip.getItemAt(i).uri)
-                    }
-                } else {
-                    it.data?.let { uri -> selectedUris.add(uri) }
+        if (requestCode == 101 && resultCode == RESULT_OK) {
+            selectedUris = mutableListOf<Uri>().apply {
+                data?.data?.let { add(it) }
+                data?.clipData?.let { clip ->
+                    for (i in 0 until clip.itemCount) add(clip.getItemAt(i).uri)
                 }
             }
-            appendOutput("Selected ${selectedUris.size} files\n")
+            appendOutput("${selectedUris.size} file(s) selected\n")
         }
     }
 
-    private fun uploadFiles() {
+    private fun uploadFiles(uris: List<Uri>) {
         val uploadUrl = uploadUrlInput.text.toString().trim()
+
         if (uploadUrl.isEmpty()) {
             appendOutput("ERROR: Upload link missing\n")
             return
         }
-        if (selectedUris.isEmpty()) {
-            appendOutput("No files selected to send\n")
-            return
-        }
 
         thread {
-            for (uri in selectedUris) {
+            for (uri in uris) {
                 try {
                     runOnUiThread { appendOutput("Uploading: $uri\n") }
                     uploadSingleFile(uploadUrl, uri)
@@ -138,31 +142,37 @@ class MainActivity : Activity() {
     }
 
     private fun uploadSingleFile(uploadUrl: String, uri: Uri) {
+
         val boundary = "----AndroidBoundary${System.currentTimeMillis()}"
         val lineEnd = "\r\n"
         val twoHyphens = "--"
 
         val url = URL(uploadUrl)
         val connection = url.openConnection() as HttpURLConnection
-
         connection.apply {
             doOutput = true
             doInput = true
             requestMethod = "POST"
-            setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+            setRequestProperty(
+                "Content-Type",
+                "multipart/form-data; boundary=$boundary"
+            )
         }
 
         val outputStream = DataOutputStream(connection.outputStream)
-
         val fileName = uri.lastPathSegment ?: "upload_file"
         val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
 
         outputStream.writeBytes(twoHyphens + boundary + lineEnd)
-        outputStream.writeBytes("Content-Disposition: form-data; name=\"file\"; filename=\"$fileName\"$lineEnd")
+        outputStream.writeBytes(
+            "Content-Disposition: form-data; name=\"file\"; filename=\"$fileName\"$lineEnd"
+        )
         outputStream.writeBytes("Content-Type: $mimeType$lineEnd")
         outputStream.writeBytes(lineEnd)
 
-        contentResolver.openInputStream(uri)?.use { input -> input.copyTo(outputStream) }
+        contentResolver.openInputStream(uri)?.use { input ->
+            input.copyTo(outputStream)
+        }
 
         outputStream.writeBytes(lineEnd)
         outputStream.writeBytes(twoHyphens + boundary + twoHyphens + lineEnd)
