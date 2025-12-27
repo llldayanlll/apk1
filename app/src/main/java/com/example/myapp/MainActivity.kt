@@ -3,16 +3,15 @@ package com.example.myapp
 import android.os.Bundle
 import android.widget.*
 import android.net.Uri
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.Manifest
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.activity.result.contract.ActivityResultContracts
 import kotlin.concurrent.thread
-import java.net.HttpURLConnection
-import java.net.URL
-import java.io.DataOutputStream
+import okhttp3.*
+import java.io.InputStream
 
 class MainActivity : AppCompatActivity() {
 
@@ -26,16 +25,7 @@ class MainActivity : AppCompatActivity() {
     private val PERMISSIONS = arrayOf(
         Manifest.permission.READ_EXTERNAL_STORAGE
     )
-
-    private val pickMedia =
-        registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> ->
-            if (uris.isNotEmpty()) {
-                selectedUris = uris
-                appendOutput("Selected ${uris.size} files\n")
-            } else {
-                appendOutput("No files selected\n")
-            }
-        }
+    private val PICK_FILES_REQUEST = 101
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,7 +46,7 @@ class MainActivity : AppCompatActivity() {
 
         pickButton = Button(this).apply {
             text = "SELECT FILES"
-            setOnClickListener { pickMedia.launch("*/*") }
+            setOnClickListener { pickFiles() }
         }
 
         sendButton = Button(this).apply {
@@ -96,27 +86,73 @@ class MainActivity : AppCompatActivity() {
         val missing = PERMISSIONS.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-
         if (missing.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, missing.toTypedArray(), 100)
         }
     }
 
+    private fun pickFiles() {
+        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            type = "*/*"
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        }
+        startActivityForResult(Intent.createChooser(intent, "Select files"), PICK_FILES_REQUEST)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == PICK_FILES_REQUEST && resultCode == RESULT_OK) {
+            val uris = mutableListOf<Uri>()
+            data?.data?.let { uris.add(it) }
+            data?.clipData?.let { clip ->
+                for (i in 0 until clip.itemCount) {
+                    uris.add(clip.getItemAt(i).uri)
+                }
+            }
+            if (uris.isNotEmpty()) {
+                selectedUris = uris
+                appendOutput("Selected ${uris.size} files\n")
+            } else {
+                appendOutput("No files selected\n")
+            }
+        }
+    }
+
     private fun uploadFiles(uris: List<Uri>) {
         val uploadUrl = uploadUrlInput.text.toString().trim()
-
         if (uploadUrl.isEmpty()) {
             appendOutput("ERROR: Upload link missing\n")
             return
         }
 
         thread {
+            val client = OkHttpClient()
             for (uri in uris) {
                 try {
                     runOnUiThread { appendOutput("Uploading: $uri\n") }
 
-                    uploadSingleFile(uploadUrl, uri)
+                    val inputStream: InputStream? = contentResolver.openInputStream(uri)
+                    val fileName = uri.lastPathSegment ?: "upload_file"
 
+                    val requestBody = inputStream?.let { stream ->
+                        object : RequestBody() {
+                            override fun contentType() = MediaType.parse("application/octet-stream")
+                            override fun writeTo(sink: okio.BufferedSink) {
+                                stream.source().use { source -> sink.writeAll(source) }
+                            }
+                        }
+                    } ?: continue
+
+                    val request = Request.Builder()
+                        .url(uploadUrl)
+                        .post(MultipartBody.Builder()
+                            .setType(MultipartBody.FORM)
+                            .addFormDataPart("file", fileName, requestBody)
+                            .build())
+                        .build()
+
+                    val response = client.newCall(request).execute()
+                    if (!response.isSuccessful) throw Exception("HTTP ${response.code()}")
                     runOnUiThread { appendOutput("SUCCESS: $uri\n") }
 
                 } catch (e: Exception) {
@@ -124,50 +160,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-    }
-
-    private fun uploadSingleFile(uploadUrl: String, uri: Uri) {
-        val boundary = "----AndroidBoundary${System.currentTimeMillis()}"
-        val lineEnd = "\r\n"
-        val twoHyphens = "--"
-
-        val url = URL(uploadUrl)
-        val connection = url.openConnection() as HttpURLConnection
-
-        connection.apply {
-            doOutput = true
-            doInput = true
-            requestMethod = "POST"
-            setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-        }
-
-        val outputStream = DataOutputStream(connection.outputStream)
-
-        val fileName = uri.lastPathSegment ?: "upload_file"
-        val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
-
-        outputStream.writeBytes(twoHyphens + boundary + lineEnd)
-        outputStream.writeBytes(
-            "Content-Disposition: form-data; name=\"file\"; filename=\"$fileName\"$lineEnd"
-        )
-        outputStream.writeBytes("Content-Type: $mimeType$lineEnd")
-        outputStream.writeBytes(lineEnd)
-
-        contentResolver.openInputStream(uri)?.use { input ->
-            input.copyTo(outputStream)
-        }
-
-        outputStream.writeBytes(lineEnd)
-        outputStream.writeBytes(twoHyphens + boundary + twoHyphens + lineEnd)
-        outputStream.flush()
-        outputStream.close()
-
-        val responseCode = connection.responseCode
-        if (responseCode !in 200..299) {
-            throw Exception("HTTP $responseCode")
-        }
-
-        connection.disconnect()
     }
 
     private fun appendOutput(text: String) {
