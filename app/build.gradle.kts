@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.example.myapp"
-    compileSdk = 34
+    compileSdk = 30
 
     defaultConfig {
         applicationId = "com.example.myapp"
         minSdk = 21
-        targetSdk = 34
+        targetSdk = 30
         versionCode = 1
         versionName = "1.0.0"
     }
@@ -36,5 +36,4 @@ kotlin {
 dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.core:core-ktx:1.12.0")
-    implementation("com.squareup.okhttp3:okhttp:3.14.9")
 }
