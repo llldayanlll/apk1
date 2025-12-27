@@ -1,11 +1,11 @@
 package com.example.myapp
 
-import android.app.Activity
 import android.os.Bundle
 import android.widget.*
 import android.net.Uri
 import android.content.pm.PackageManager
 import android.Manifest
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,7 +14,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.io.DataOutputStream
 
-class MainActivity : Activity() {
+class MainActivity : AppCompatActivity() {
 
     private lateinit var uploadUrlInput: EditText
     private lateinit var outputText: TextView
@@ -56,9 +56,7 @@ class MainActivity : Activity() {
 
         pickButton = Button(this).apply {
             text = "SELECT FILES"
-            setOnClickListener {
-                pickMedia.launch("*/*")
-            }
+            setOnClickListener { pickMedia.launch("*/*") }
         }
 
         sendButton = Button(this).apply {
@@ -115,27 +113,20 @@ class MainActivity : Activity() {
         thread {
             for (uri in uris) {
                 try {
-                    runOnUiThread {
-                        appendOutput("Uploading: $uri\n")
-                    }
+                    runOnUiThread { appendOutput("Uploading: $uri\n") }
 
                     uploadSingleFile(uploadUrl, uri)
 
-                    runOnUiThread {
-                        appendOutput("SUCCESS: $uri\n")
-                    }
+                    runOnUiThread { appendOutput("SUCCESS: $uri\n") }
 
                 } catch (e: Exception) {
-                    runOnUiThread {
-                        appendOutput("FAILED: ${e.message}\n")
-                    }
+                    runOnUiThread { appendOutput("FAILED: ${e.message}\n") }
                 }
             }
         }
     }
 
     private fun uploadSingleFile(uploadUrl: String, uri: Uri) {
-
         val boundary = "----AndroidBoundary${System.currentTimeMillis()}"
         val lineEnd = "\r\n"
         val twoHyphens = "--"
@@ -147,10 +138,7 @@ class MainActivity : Activity() {
             doOutput = true
             doInput = true
             requestMethod = "POST"
-            setRequestProperty(
-                "Content-Type",
-                "multipart/form-data; boundary=$boundary"
-            )
+            setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
         }
 
         val outputStream = DataOutputStream(connection.outputStream)
@@ -184,8 +172,6 @@ class MainActivity : Activity() {
 
     private fun appendOutput(text: String) {
         outputText.append(text)
-        scrollView.post {
-            scrollView.fullScroll(ScrollView.FOCUS_DOWN)
-        }
+        scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
     }
 }
