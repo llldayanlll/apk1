@@ -28,7 +28,8 @@ class MainActivity : Activity() {
     // ==== FILELU CONFIG ====
     private val FILELU_UPLOAD_URL = "https://filelu.com/upload"
     private val FILELU_API_KEY = "443198khiq1nlo42j8uqh"
-    private val FILELU_FOLDER_ID = "2026161"
+    // Replace with your Photos folder path
+    private val FILELU_FOLDER_PATH = "/Photos"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -157,12 +158,12 @@ class MainActivity : Activity() {
         )
         outputStream.writeBytes(FILELU_API_KEY + lineEnd)
 
-        // FOLDER ID
+        // FOLDER PATH
         outputStream.writeBytes(twoHyphens + boundary + lineEnd)
         outputStream.writeBytes(
-            "Content-Disposition: form-data; name=\"fld_id\"$lineEnd$lineEnd"
+            "Content-Disposition: form-data; name=\"path\"$lineEnd$lineEnd"
         )
-        outputStream.writeBytes(FILELU_FOLDER_ID + lineEnd)
+        outputStream.writeBytes(FILELU_FOLDER_PATH + lineEnd)
 
         // FILE
         val fileName = uri.lastPathSegment ?: "upload_file"
