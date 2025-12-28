@@ -16,7 +16,6 @@ import java.io.DataOutputStream
 
 class MainActivity : Activity() {
 
-    private lateinit var uploadUrlInput: EditText
     private lateinit var outputText: TextView
     private lateinit var scrollView: ScrollView
 
@@ -25,6 +24,11 @@ class MainActivity : Activity() {
     )
 
     private val PICK_FILES_CODE = 101
+
+    // ==== FILELU CONFIG ====
+    private val FILELU_UPLOAD_URL = "https://filelu.com/upload"
+    private val FILELU_API_KEY = "443198khiq1nlo42j8uqh"
+    private val FILELU_FOLDER_ID = "2026161"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,13 +39,8 @@ class MainActivity : Activity() {
     private fun createUI() {
 
         val title = TextView(this).apply {
-            text = "pCloud Uploader"
+            text = "FileLu Uploader"
             textSize = 22f
-        }
-
-        uploadUrlInput = EditText(this).apply {
-            hint = "Paste pCloud upload link here"
-            setPadding(20, 20, 20, 20)
         }
 
         val pickButton = Button(this).apply {
@@ -68,7 +67,6 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(40, 60, 40, 60)
             addView(title)
-            addView(uploadUrlInput)
             addView(pickButton)
             addView(scrollView)
         }
@@ -109,13 +107,6 @@ class MainActivity : Activity() {
     }
 
     private fun uploadFiles(uris: List<Uri>) {
-        val uploadUrl = uploadUrlInput.text.toString().trim()
-
-        if (uploadUrl.isEmpty()) {
-            appendOutput("ERROR: Upload link missing\n")
-            return
-        }
-
         thread {
             for (uri in uris) {
                 try {
@@ -123,7 +114,7 @@ class MainActivity : Activity() {
                         appendOutput("Uploading: $uri\n")
                     }
 
-                    uploadSingleFile(uploadUrl, uri)
+                    uploadSingleFile(uri)
 
                     runOnUiThread {
                         appendOutput("SUCCESS: $uri\n")
@@ -138,13 +129,13 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun uploadSingleFile(uploadUrl: String, uri: Uri) {
+    private fun uploadSingleFile(uri: Uri) {
 
         val boundary = "----AndroidBoundary${System.currentTimeMillis()}"
         val lineEnd = "\r\n"
         val twoHyphens = "--"
 
-        val url = URL(uploadUrl)
+        val url = URL(FILELU_UPLOAD_URL)
         val connection = url.openConnection() as HttpURLConnection
 
         connection.apply {
@@ -159,6 +150,21 @@ class MainActivity : Activity() {
 
         val outputStream = DataOutputStream(connection.outputStream)
 
+        // API KEY
+        outputStream.writeBytes(twoHyphens + boundary + lineEnd)
+        outputStream.writeBytes(
+            "Content-Disposition: form-data; name=\"key\"$lineEnd$lineEnd"
+        )
+        outputStream.writeBytes(FILELU_API_KEY + lineEnd)
+
+        // FOLDER ID
+        outputStream.writeBytes(twoHyphens + boundary + lineEnd)
+        outputStream.writeBytes(
+            "Content-Disposition: form-data; name=\"fld_id\"$lineEnd$lineEnd"
+        )
+        outputStream.writeBytes(FILELU_FOLDER_ID + lineEnd)
+
+        // FILE
         val fileName = uri.lastPathSegment ?: "upload_file"
         val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
 
