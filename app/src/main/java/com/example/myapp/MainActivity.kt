@@ -24,7 +24,7 @@ class MainActivity : Activity() {
     private val PICK_FILES_CODE = 101
     private val PERMISSIONS = arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
 
-    // ==== FILELU CONFIG ====
+    // ==== FILELU API KEY ====
     private val API_KEY = "443198khiq1nlo42j8uqh"
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -99,10 +99,10 @@ class MainActivity : Activity() {
                 try {
                     log("Preparing upload: $uri")
 
-                    val serverInfo = getUploadServer()
-                    uploadFile(serverInfo.first, serverInfo.second, uri)
+                    val (uploadUrl, sessId) = getUploadServer()
+                    uploadFile(uploadUrl, sessId, uri)
 
-                    log("SUCCESS: $uri")
+                    log("SUCCESS")
                 } catch (e: Exception) {
                     log("FAILED: ${e.message}")
                 }
