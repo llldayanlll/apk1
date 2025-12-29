@@ -24,8 +24,9 @@ class MainActivity : Activity() {
     private val PICK_FILES_CODE = 101
     private val PERMISSIONS = arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
 
-    // ==== FILELU API KEY ====
+    // ==== FILELU API KEY & Non-encrypted Folder ID ====
     private val API_KEY = "443198khiq1nlo42j8uqh"
+    private val NON_ENCRYPTED_FLD_ID = "2026159" // replace with actual non-encrypted folder ID
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -100,7 +101,9 @@ class MainActivity : Activity() {
                     log("Preparing upload: $uri")
 
                     val (uploadUrl, sessId) = getUploadServer()
-                    uploadFile(uploadUrl, sessId, uri)
+                    val fileCode = uploadFile(uploadUrl, sessId, uri)
+
+                    moveToNonEncryptedFolder(fileCode)
 
                     log("SUCCESS")
                 } catch (e: Exception) {
@@ -110,26 +113,19 @@ class MainActivity : Activity() {
         }
     }
 
-    // STEP 1 — get upload server + sess_id
     private fun getUploadServer(): Pair<String, String> {
         val url = URL("https://filelu.com/api/upload/server?key=$API_KEY")
         val conn = url.openConnection() as HttpURLConnection
         conn.requestMethod = "GET"
-
         val response = BufferedReader(InputStreamReader(conn.inputStream)).readText()
         conn.disconnect()
 
-        val uploadUrl =
-            Regex("\"result\":\"([^\"]+)\"").find(response)!!.groupValues[1]
-        val sessId =
-            Regex("\"sess_id\":\"([^\"]+)\"").find(response)!!.groupValues[1]
-
+        val uploadUrl = Regex("\"result\":\"([^\"]+)\"").find(response)!!.groupValues[1]
+        val sessId = Regex("\"sess_id\":\"([^\"]+)\"").find(response)!!.groupValues[1]
         return Pair(uploadUrl, sessId)
     }
 
-    // STEP 2 — upload file
-    private fun uploadFile(uploadUrl: String, sessId: String, uri: Uri) {
-
+    private fun uploadFile(uploadUrl: String, sessId: String, uri: Uri): String {
         val boundary = "----Android${System.currentTimeMillis()}"
         val lineEnd = "\r\n"
         val twoHyphens = "--"
@@ -141,7 +137,6 @@ class MainActivity : Activity() {
         }
 
         val out = DataOutputStream(conn.outputStream)
-
         fun field(name: String, value: String) {
             out.writeBytes(twoHyphens + boundary + lineEnd)
             out.writeBytes("Content-Disposition: form-data; name=\"$name\"$lineEnd$lineEnd")
@@ -161,7 +156,6 @@ class MainActivity : Activity() {
         out.writeBytes("Content-Type: $type$lineEnd$lineEnd")
 
         contentResolver.openInputStream(uri)!!.copyTo(out)
-
         out.writeBytes(lineEnd + twoHyphens + boundary + twoHyphens + lineEnd)
         out.flush()
         out.close()
@@ -170,6 +164,18 @@ class MainActivity : Activity() {
             throw Exception("HTTP ${conn.responseCode}")
         }
 
+        val resp = BufferedReader(InputStreamReader(conn.inputStream)).readText()
+        conn.disconnect()
+
+        val fileCode = Regex("\"file_code\":\"([^\"]+)\"").find(resp)?.groupValues?.get(1)
+        return fileCode ?: throw Exception("No file_code returned")
+    }
+
+    private fun moveToNonEncryptedFolder(fileCode: String) {
+        val url = URL("https://filelu.com/api/file/set_folder?file_code=$fileCode&fld_id=$NON_ENCRYPTED_FLD_ID&key=$API_KEY")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.requestMethod = "GET"
+        conn.inputStream.close()
         conn.disconnect()
     }
 
