@@ -13,51 +13,45 @@ import kotlin.concurrent.thread
 import java.net.HttpURLConnection
 import java.net.URL
 import java.io.DataOutputStream
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
 class MainActivity : Activity() {
 
     private lateinit var outputText: TextView
     private lateinit var scrollView: ScrollView
 
-    private val PERMISSIONS = arrayOf(
-        Manifest.permission.READ_EXTERNAL_STORAGE
-    )
-
     private val PICK_FILES_CODE = 101
+    private val PERMISSIONS = arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
 
     // ==== FILELU CONFIG ====
-    private val FILELU_UPLOAD_URL = "https://filelu.com/upload"
-    private val FILELU_API_KEY = "443198khiq1nlo42j8uqh"
-    // Replace with your Photos folder path
-    private val FILELU_FOLDER_PATH = "/Photos"
+    private val API_KEY = "443198khiq1nlo42j8uqh"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createUI()
-        checkAndRequestPermissions()
+        checkPermissions()
     }
 
     private fun createUI() {
-
         val title = TextView(this).apply {
-            text = "FileLu Uploader"
+            text = "Auto FileLu Uploader"
             textSize = 22f
         }
 
         val pickButton = Button(this).apply {
-            text = "SELECT FILES"
+            text = "SELECT & SEND"
             setOnClickListener {
-                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     type = "*/*"
                     putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
                 }
-                startActivityForResult(intent, PICK_FILES_CODE)
+                startActivityForResult(i, PICK_FILES_CODE)
             }
         }
 
         outputText = TextView(this).apply {
             text = "=== Upload Log ===\n\n"
-            setPadding(20, 20, 20, 20)
         }
 
         scrollView = ScrollView(this).apply {
@@ -75,35 +69,27 @@ class MainActivity : Activity() {
         setContentView(layout)
     }
 
-    private fun checkAndRequestPermissions() {
-        val missing = PERMISSIONS.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-
-        if (missing.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, missing.toTypedArray(), 100)
+    private fun checkPermissions() {
+        if (ContextCompat.checkSelfPermission(this, PERMISSIONS[0])
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(this, PERMISSIONS, 100)
         }
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
+    override fun onActivityResult(req: Int, res: Int, data: Intent?) {
+        super.onActivityResult(req, res, data)
 
-        if (requestCode == PICK_FILES_CODE && resultCode == RESULT_OK && data != null) {
+        if (req == PICK_FILES_CODE && res == RESULT_OK && data != null) {
             val uris = mutableListOf<Uri>()
 
-            data.clipData?.let { clip ->
-                for (i in 0 until clip.itemCount) {
-                    uris.add(clip.getItemAt(i).uri)
+            data.clipData?.let {
+                for (i in 0 until it.itemCount) {
+                    uris.add(it.getItemAt(i).uri)
                 }
-            } ?: data.data?.let {
-                uris.add(it)
-            }
+            } ?: data.data?.let { uris.add(it) }
 
-            if (uris.isNotEmpty()) {
-                uploadFiles(uris)
-            } else {
-                appendOutput("No files selected\n")
-            }
+            if (uris.isNotEmpty()) uploadFiles(uris)
         }
     }
 
@@ -111,92 +97,86 @@ class MainActivity : Activity() {
         thread {
             for (uri in uris) {
                 try {
-                    runOnUiThread {
-                        appendOutput("Uploading: $uri\n")
-                    }
+                    log("Preparing upload: $uri")
 
-                    uploadSingleFile(uri)
+                    val serverInfo = getUploadServer()
+                    uploadFile(serverInfo.first, serverInfo.second, uri)
 
-                    runOnUiThread {
-                        appendOutput("SUCCESS: $uri\n")
-                    }
-
+                    log("SUCCESS: $uri")
                 } catch (e: Exception) {
-                    runOnUiThread {
-                        appendOutput("FAILED: ${e.message}\n")
-                    }
+                    log("FAILED: ${e.message}")
                 }
             }
         }
     }
 
-    private fun uploadSingleFile(uri: Uri) {
+    // STEP 1 — get upload server + sess_id
+    private fun getUploadServer(): Pair<String, String> {
+        val url = URL("https://filelu.com/api/upload/server?key=$API_KEY")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.requestMethod = "GET"
 
-        val boundary = "----AndroidBoundary${System.currentTimeMillis()}"
+        val response = BufferedReader(InputStreamReader(conn.inputStream)).readText()
+        conn.disconnect()
+
+        val uploadUrl =
+            Regex("\"result\":\"([^\"]+)\"").find(response)!!.groupValues[1]
+        val sessId =
+            Regex("\"sess_id\":\"([^\"]+)\"").find(response)!!.groupValues[1]
+
+        return Pair(uploadUrl, sessId)
+    }
+
+    // STEP 2 — upload file
+    private fun uploadFile(uploadUrl: String, sessId: String, uri: Uri) {
+
+        val boundary = "----Android${System.currentTimeMillis()}"
         val lineEnd = "\r\n"
         val twoHyphens = "--"
 
-        val url = URL(FILELU_UPLOAD_URL)
-        val connection = url.openConnection() as HttpURLConnection
-
-        connection.apply {
+        val conn = (URL(uploadUrl).openConnection() as HttpURLConnection).apply {
             doOutput = true
-            doInput = true
             requestMethod = "POST"
-            setRequestProperty(
-                "Content-Type",
-                "multipart/form-data; boundary=$boundary"
-            )
+            setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
         }
 
-        val outputStream = DataOutputStream(connection.outputStream)
+        val out = DataOutputStream(conn.outputStream)
 
-        // API KEY
-        outputStream.writeBytes(twoHyphens + boundary + lineEnd)
-        outputStream.writeBytes(
-            "Content-Disposition: form-data; name=\"key\"$lineEnd$lineEnd"
-        )
-        outputStream.writeBytes(FILELU_API_KEY + lineEnd)
-
-        // FOLDER PATH
-        outputStream.writeBytes(twoHyphens + boundary + lineEnd)
-        outputStream.writeBytes(
-            "Content-Disposition: form-data; name=\"path\"$lineEnd$lineEnd"
-        )
-        outputStream.writeBytes(FILELU_FOLDER_PATH + lineEnd)
-
-        // FILE
-        val fileName = uri.lastPathSegment ?: "upload_file"
-        val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
-
-        outputStream.writeBytes(twoHyphens + boundary + lineEnd)
-        outputStream.writeBytes(
-            "Content-Disposition: form-data; name=\"file\"; filename=\"$fileName\"$lineEnd"
-        )
-        outputStream.writeBytes("Content-Type: $mimeType$lineEnd")
-        outputStream.writeBytes(lineEnd)
-
-        contentResolver.openInputStream(uri)?.use { input ->
-            input.copyTo(outputStream)
+        fun field(name: String, value: String) {
+            out.writeBytes(twoHyphens + boundary + lineEnd)
+            out.writeBytes("Content-Disposition: form-data; name=\"$name\"$lineEnd$lineEnd")
+            out.writeBytes(value + lineEnd)
         }
 
-        outputStream.writeBytes(lineEnd)
-        outputStream.writeBytes(twoHyphens + boundary + twoHyphens + lineEnd)
-        outputStream.flush()
-        outputStream.close()
+        field("sess_id", sessId)
+        field("utype", "prem")
 
-        val responseCode = connection.responseCode
-        if (responseCode !in 200..299) {
-            throw Exception("HTTP $responseCode")
+        val name = uri.lastPathSegment ?: "file"
+        val type = contentResolver.getType(uri) ?: "application/octet-stream"
+
+        out.writeBytes(twoHyphens + boundary + lineEnd)
+        out.writeBytes(
+            "Content-Disposition: form-data; name=\"file\"; filename=\"$name\"$lineEnd"
+        )
+        out.writeBytes("Content-Type: $type$lineEnd$lineEnd")
+
+        contentResolver.openInputStream(uri)!!.copyTo(out)
+
+        out.writeBytes(lineEnd + twoHyphens + boundary + twoHyphens + lineEnd)
+        out.flush()
+        out.close()
+
+        if (conn.responseCode !in 200..299) {
+            throw Exception("HTTP ${conn.responseCode}")
         }
 
-        connection.disconnect()
+        conn.disconnect()
     }
 
-    private fun appendOutput(text: String) {
-        outputText.append(text)
-        scrollView.post {
-            scrollView.fullScroll(ScrollView.FOCUS_DOWN)
+    private fun log(msg: String) {
+        runOnUiThread {
+            outputText.append(msg + "\n")
+            scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
         }
     }
 }
