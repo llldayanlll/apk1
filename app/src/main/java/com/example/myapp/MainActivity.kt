@@ -25,8 +25,8 @@ class MainActivity : Activity() {
     private val PERMISSIONS = arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
 
     // ===== FileLu config =====
-    private val API_KEY = "abcdapikey"
-    private val NON_ENCRYPTED_FLD_ID = "2026161"
+    private val API_KEY = "443198khiq1nlo42j8uqh"
+    private val NON_ENCRYPTED_FLD_ID = "2026159"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
