@@ -1,205 +1,121 @@
 package com.example.myapp
 
 import android.app.Activity
-import android.os.Bundle
-import android.widget.*
-import android.net.Uri
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.Manifest
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import kotlin.concurrent.thread
+import android.net.Uri
+import android.os.Bundle
+import android.provider.OpenableColumns
+import android.widget.*
+import androidx.core.view.setPadding
+import kotlinx.coroutines.*
+import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
-import java.io.DataOutputStream
-import java.io.BufferedReader
-import java.io.InputStreamReader
 
 class MainActivity : Activity() {
 
-    private lateinit var outputText: TextView
-    private lateinit var scrollView: ScrollView
+    private lateinit var urlInput: EditText
+    private var fileUri: Uri? = null
+    private lateinit var statusBox: TextView
 
-    private val PICK_FILES_CODE = 101
-    private val PERMISSIONS = arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-
-    // ===== FileLu config =====
-    private val API_KEY = "443198khiq1nlo42j8uqh"
-    private val NON_ENCRYPTED_FLD_ID = "2026159"
+    private val PICK_FILE_REQUEST = 1001
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        createUI()
-        checkPermissions()
-    }
 
-    private fun createUI() {
-        val title = TextView(this).apply {
-            text = "Auto FileLu Uploader"
-            textSize = 22f
+        urlInput = EditText(this).apply { hint = "Enter full public URL (https://...)" }
+        val pickButton = Button(this).apply { 
+            text = "Pick Media"
+            setOnClickListener { pickFile() }
         }
-
-        val pickButton = Button(this).apply {
-            text = "SELECT & SEND"
-            setOnClickListener {
-                val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                    type = "*/*"
-                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                }
-                startActivityForResult(i, PICK_FILES_CODE)
-            }
+        val sendButton = Button(this).apply { 
+            text = "Send"
+            setOnClickListener { uploadFile() }
         }
-
-        outputText = TextView(this).apply {
-            text = "=== Upload Log ===\n\n"
-        }
-
-        scrollView = ScrollView(this).apply {
-            addView(outputText)
-        }
+        statusBox = TextView(this).apply { setPadding(20) }
 
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(40, 60, 40, 60)
-            addView(title)
+            setPadding(40)
+            addView(TextView(this@MainActivity).apply { text = "Public URL:" })
+            addView(urlInput)
             addView(pickButton)
-            addView(scrollView)
+            addView(sendButton)
+            addView(TextView(this@MainActivity).apply { text = "\nStatus:" })
+            addView(statusBox)
         }
 
         setContentView(layout)
     }
 
-    private fun checkPermissions() {
-        if (ContextCompat.checkSelfPermission(this, PERMISSIONS[0])
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(this, PERMISSIONS, 100)
+    private fun pickFile() {
+        val intent = Intent(Intent.ACTION_GET_CONTENT)
+        intent.type = "*/*"
+        startActivityForResult(Intent.createChooser(intent, "Select File"), PICK_FILE_REQUEST)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == PICK_FILE_REQUEST && resultCode == RESULT_OK) {
+            fileUri = data?.data
+            fileUri?.let { statusBox.append("Selected file: ${getFileName(it)}\n") }
         }
     }
 
-    override fun onActivityResult(req: Int, res: Int, data: Intent?) {
-        super.onActivityResult(req, res, data)
+    private fun uploadFile() {
+        val uri = fileUri
+        if (uri == null) {
+            statusBox.append("No file selected\n")
+            return
+        }
+        val publicUrl = urlInput.text.toString().trim()
+        if (publicUrl.isEmpty()) {
+            statusBox.append("Enter public URL\n")
+            return
+        }
 
-        if (req == PICK_FILES_CODE && res == RESULT_OK && data != null) {
-            val uris = mutableListOf<Uri>()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val url = URL(publicUrl)
+                val conn = url.openConnection() as HttpURLConnection
+                conn.doOutput = true
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=*****")
 
-            data.clipData?.let {
-                for (i in 0 until it.itemCount) {
-                    uris.add(it.getItemAt(i).uri)
+                val output = conn.outputStream
+                val inputStream = contentResolver.openInputStream(uri)
+                val fileBytes = inputStream!!.readBytes()
+                val writer = OutputStreamWriter(output)
+
+                writer.write("--*****\r\nContent-Disposition: form-data; name=\"file\"; filename=\"${getFileName(uri)}\"\r\n\r\n")
+                writer.flush()
+                output.write(fileBytes)
+                output.flush()
+                writer.write("\r\n--*****--\r\n")
+                writer.flush()
+                output.close()
+
+                val response = conn.inputStream.bufferedReader().readText()
+                withContext(Dispatchers.Main) {
+                    statusBox.append("Server response: $response\n")
                 }
-            } ?: data.data?.let { uris.add(it) }
 
-            if (uris.isNotEmpty()) uploadFiles(uris)
-        }
-    }
-
-    private fun uploadFiles(uris: List<Uri>) {
-        thread {
-            for (uri in uris) {
-                try {
-                    log("Uploading: $uri")
-
-                    val (uploadUrl, sessId) = getUploadServer()
-                    val fileCode = uploadFile(uploadUrl, sessId, uri)
-
-                    moveToNonEncryptedFolder(fileCode)
-
-                    log("SUCCESS → $fileCode")
-                } catch (e: Exception) {
-                    log("FAILED: ${e.message}")
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    statusBox.append("Error: ${e.message}\n")
                 }
             }
         }
     }
 
-    private fun getUploadServer(): Pair<String, String> {
-        val url = URL("https://filelu.com/api/upload/server?key=$API_KEY")
-        val conn = url.openConnection() as HttpURLConnection
-        conn.requestMethod = "GET"
-
-        val response = BufferedReader(InputStreamReader(conn.inputStream)).readText()
-        conn.disconnect()
-
-        val uploadUrl =
-            Regex("\"result\":\"([^\"]+)\"").find(response)!!.groupValues[1]
-        val sessId =
-            Regex("\"sess_id\":\"([^\"]+)\"").find(response)!!.groupValues[1]
-
-        return Pair(uploadUrl, sessId)
-    }
-
-    private fun uploadFile(uploadUrl: String, sessId: String, uri: Uri): String {
-        val boundary = "----Android${System.currentTimeMillis()}"
-        val lineEnd = "\r\n"
-        val twoHyphens = "--"
-
-        val conn = (URL(uploadUrl).openConnection() as HttpURLConnection).apply {
-            doOutput = true
-            requestMethod = "POST"
-            setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-            setChunkedStreamingMode(0)
+    private fun getFileName(uri: Uri): String {
+        var name = "file"
+        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (index >= 0) name = cursor.getString(index)
+            }
         }
-
-        val out = DataOutputStream(conn.outputStream)
-
-        fun field(name: String, value: String) {
-            out.writeBytes(twoHyphens + boundary + lineEnd)
-            out.writeBytes("Content-Disposition: form-data; name=\"$name\"$lineEnd$lineEnd")
-            out.writeBytes(value + lineEnd)
-        }
-
-        // ==== REQUIRED FIELDS ====
-        field("sess_id", sessId)
-        field("utype", "prem")
-        field("encrypt", "0")   // ✅ CRITICAL FIX (disable encryption)
-
-        val name = uri.lastPathSegment ?: "file"
-        val type = contentResolver.getType(uri) ?: "application/octet-stream"
-
-        out.writeBytes(twoHyphens + boundary + lineEnd)
-        out.writeBytes(
-            "Content-Disposition: form-data; name=\"file\"; filename=\"$name\"$lineEnd"
-        )
-        out.writeBytes("Content-Type: $type$lineEnd$lineEnd")
-
-        contentResolver.openInputStream(uri)!!.use { it.copyTo(out) }
-
-        out.writeBytes(lineEnd + twoHyphens + boundary + twoHyphens + lineEnd)
-        out.flush()
-        out.close()
-
-        if (conn.responseCode !in 200..299) {
-            throw Exception("HTTP ${conn.responseCode}")
-        }
-
-        val resp = BufferedReader(InputStreamReader(conn.inputStream)).readText()
-        conn.disconnect()
-
-        log("UPLOAD RESPONSE: $resp")
-
-        val fileCode =
-            Regex("\"file_code\":\"([^\"]+)\"").find(resp)?.groupValues?.get(1)
-
-        return fileCode ?: throw Exception("No file_code returned")
-    }
-
-    private fun moveToNonEncryptedFolder(fileCode: String) {
-        val url = URL(
-            "https://filelu.com/api/file/set_folder" +
-                "?file_code=$fileCode&fld_id=$NON_ENCRYPTED_FLD_ID&key=$API_KEY"
-        )
-        val conn = url.openConnection() as HttpURLConnection
-        conn.requestMethod = "GET"
-        conn.inputStream.close()
-        conn.disconnect()
-    }
-
-    private fun log(msg: String) {
-        runOnUiThread {
-            outputText.append(msg + "\n")
-            scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
-        }
+        return name
     }
 }
-

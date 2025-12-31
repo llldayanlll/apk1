@@ -1,0 +1,13 @@
+# This is a generated file.  Do not edit.
+buildinfo.configure.tool: configure
+buildinfo.configure.args:  '--host=aarch64-linux-gnu' '--enable-static' '--disable-shared' '--with-ssl' 'host_alias=aarch64-linux-gnu'
+buildinfo.host: x86_64-pc-linux-gnu
+buildinfo.host.cpu: x86_64
+buildinfo.host.os: linux-gnu
+buildinfo.target: aarch64-unknown-linux-gnu
+buildinfo.target.cpu: aarch64
+buildinfo.target.os: linux-gnu
+buildinfo.target.flags: UNIX GCC
+buildinfo.compiler: GNU_C
+buildinfo.compiler.version: 11
+buildinfo.sysroot: 
